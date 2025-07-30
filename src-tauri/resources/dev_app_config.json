@@ -1,0 +1,9 @@
+{
+  "signup_url": "http://localhost:8080/signup",
+  "oauth2_client_id": "ripple-im-desktop",
+  "oauth2_client_secret": "ripple",
+  "oauth2_auth_url": "http://localhost:8080/oauth2/authorize",
+  "oauth2_token_url": "http://localhost:8080/oauth2/token",
+  "callback_server_addr": "localhost:8000",
+  "oauth2_redirect_uri": "http://localhost:8000/callback"
+}
