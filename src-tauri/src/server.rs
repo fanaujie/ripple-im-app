@@ -5,9 +5,37 @@ use axum::routing::get;
 use axum::Router;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::net::ToSocketAddrs;
 use tokio::task::JoinHandle;
+
+async fn load_html_file(app: &AppHandle, filename: &str) -> String {
+    let path = format!("resources/{}", filename);
+    let resource_path = match app.path().resolve(path, BaseDirectory::Resource) {
+        Err(e) => {
+            eprintln!("Failed to resolve resource path: {}", e);
+            return format!(
+                "<h1>Error</h1><p>Failed to resolve resource path: {}</p><p>Details: {}</p>",
+                filename, e
+            );
+        }
+        Ok(path_buffer) => {
+            println!("Resolved resource path: {:?}", path_buffer);
+            path_buffer
+        }
+    };
+    match tokio::fs::read_to_string(&resource_path).await {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Failed to read HTML file {} from path {:?}: {}", filename, resource_path, e);
+            format!(
+                "<h1>Error</h1><p>Failed to read file: {}</p><p>Path: {:?}</p><p>Reason: {}</p>",
+                filename, resource_path, e
+            )
+        }
+    }
+}
 
 pub struct Server {
     close_tx: Option<tokio::sync::oneshot::Sender<()>>,
@@ -85,13 +113,13 @@ struct ApiState {
 async fn handler(
     State(api_state): State<ApiState>,
     Query(params): Query<CallbackParams>,
-) -> Html<&'static str> {
+) -> Html<String> {
     let client_state = api_state
         .app_handle
         .state::<Arc<tokio::sync::Mutex<OauthClient>>>();
     let client = client_state.lock().await;
     if !client.state_equal(&params.state) {
-        return Html("<h1>Invalid state parameter</h1>");
+        return Html(load_html_file(&api_state.app_handle, "invalid-state.html").await);
     }
     match client.request_token(params.code).await {
         Ok(token) => {
@@ -106,9 +134,11 @@ async fn handler(
                 },
             ) {
                 eprintln!("Failed to emit auth-result event: {}", e);
-                return Html("<h1>Authentication successful, but failed to notify frontend</h1>");
+                return Html(
+                    load_html_file(&api_state.app_handle, "auth-success-restart.html").await,
+                );
             }
-            Html("<h1>Authentication successful! You can close this window.</h1>")
+            Html(load_html_file(&api_state.app_handle, "auth-success.html").await)
         }
         Err(e) => {
             println!("Error requesting token: {}", e);
@@ -122,7 +152,7 @@ async fn handler(
             ) {
                 eprintln!("Failed to emit auth-result event: {}", e);
             }
-            Html("<h1>Authentication failed</h1>")
+            Html(load_html_file(&api_state.app_handle, "auth-failed.html").await)
         }
     }
 }
