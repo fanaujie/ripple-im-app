@@ -1,4 +1,5 @@
 use crate::app_config::AppConfig;
+use crate::db::DB;
 use crate::errors;
 use crate::oauth_client::OauthClient;
 use crate::server::Server;
@@ -7,8 +8,12 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
-pub fn is_token_valid() -> Result<bool, errors::CommandError> {
-    Ok(false)
+pub async fn exists_token(
+    db_state: State<'_, tokio::sync::Mutex<DB>>,
+) -> Result<bool, errors::CommandError> {
+    let db = db_state.lock().await;
+    let result = db.exists_token().await?;
+    Ok(result)
 }
 
 #[tauri::command]

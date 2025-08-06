@@ -8,7 +8,7 @@ use oauth2::basic::{
 use oauth2::{
     reqwest, AuthType, AuthUrl, Client, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
     EndpointSet, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, StandardRevocableToken,
-    TokenResponse, TokenUrl,
+    TokenUrl,
 };
 
 #[derive(Clone)]
@@ -30,7 +30,7 @@ pub struct OauthClient {
 }
 
 impl OauthClient {
-    pub fn new(app_config: &AppConfig) -> Result<Self, CommandError> {
+    pub fn new(app_config: &AppConfig) -> anyhow::Result<Self, CommandError> {
         let client = BasicClient::new(ClientId::new(app_config.oauth2_client_id.clone()))
             .set_client_secret(ClientSecret::new(app_config.oauth2_client_secret.clone()))
             .set_auth_type(AuthType::BasicAuth)
@@ -70,13 +70,15 @@ impl OauthClient {
         }
     }
 
-    pub async fn request_token(&self, code: String) -> Result<String, CommandError> {
+    pub async fn request_token(
+        &self,
+        code: String,
+    ) -> anyhow::Result<BasicTokenResponse, CommandError> {
         if self.pkce_verifier.is_none() {
             return Err(CommandError::PkceVerifierError);
         }
 
         let http_client = reqwest::ClientBuilder::new()
-            //.proxy(reqwest::Proxy::http("192.168.50.31:9000")?)
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("Client should build");
@@ -89,10 +91,7 @@ impl OauthClient {
             .await;
         match token {
             Ok(token) => {
-                let refresh_token = token.refresh_token().unwrap();
-                println!("Access Token: {:?}", token.access_token().secret());
-                println!("Refresh Token: {:?}", refresh_token.secret());
-
+                Ok(token)
                 // let new_token = self
                 //     .client
                 //     .exchange_refresh_token(refresh_token)
@@ -110,7 +109,6 @@ impl OauthClient {
                 //         println!("Failed to refresh token");
                 //     }
                 // }
-                Ok("Token received successfully".to_string())
             }
             Err(e) => {
                 eprintln!("Error requesting token: {}", e);

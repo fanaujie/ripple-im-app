@@ -1,8 +1,11 @@
+use crate::auth_token::AuthToken;
+use crate::db::DB;
 use crate::oauth_client::OauthClient;
 use axum::extract::{Query, State};
 use axum::response::Html;
 use axum::routing::get;
 use axum::Router;
+use oauth2::TokenResponse;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::path::BaseDirectory;
@@ -20,15 +23,15 @@ async fn load_html_file(app: &AppHandle, filename: &str) -> String {
                 filename, e
             );
         }
-        Ok(path_buffer) => {
-            println!("Resolved resource path: {:?}", path_buffer);
-            path_buffer
-        }
+        Ok(path_buffer) => path_buffer,
     };
     match tokio::fs::read_to_string(&resource_path).await {
         Ok(content) => content,
         Err(e) => {
-            eprintln!("Failed to read HTML file {} from path {:?}: {}", filename, resource_path, e);
+            eprintln!(
+                "Failed to read HTML file {} from path {:?}: {}",
+                filename, resource_path, e
+            );
             format!(
                 "<h1>Error</h1><p>Failed to read file: {}</p><p>Path: {:?}</p><p>Reason: {}</p>",
                 filename, resource_path, e
@@ -123,8 +126,35 @@ async fn handler(
     }
     match client.request_token(params.code).await {
         Ok(token) => {
-            println!("Token received: {}", token);
-
+            // save token
+            let dn_state = api_state.app_handle.state::<tokio::sync::Mutex<DB>>();
+            let db = dn_state.lock().await;
+            let _ = db
+                .save_token(
+                    token.access_token().secret(),
+                    token.refresh_token().unwrap().secret(),
+                )
+                .await
+                .expect("Failed to save token to database");
+            // let _ = match AuthToken::decode_jwt_payload(token.access_token().secret()) {
+            //     Ok(claims) => {
+            //         println!("Successfully verified the token claims: {:?}", claims);
+            //     }
+            //     Err(e) => {
+            //         println!("Failed to parse token: {}", e);
+            //         // Emit auth failure event to frontend
+            //         if let Err(e) = api_state.app_handle.emit(
+            //             "auth-result",
+            //             AuthenticationState {
+            //                 success: false,
+            //                 message: e.to_string(),
+            //             },
+            //         ) {
+            //             eprintln!("Failed to emit auth-result event: {}", e);
+            //         }
+            //         return Html(load_html_file(&api_state.app_handle, "auth-failed.html").await);
+            //     }
+            // };
             // Emit auth success event to frontend
             if let Err(e) = api_state.app_handle.emit(
                 "auth-result",

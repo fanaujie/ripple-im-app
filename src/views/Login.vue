@@ -66,8 +66,8 @@ const handleSignin = async () => {
 
 onMounted(async () => {
   try {
-    const r = await invoke('is_token_valid');
-    if (r) {
+    const exist = await invoke('exists_token');
+    if (exist) {
       try {
         await router.replace({name: 'home'});
       } catch (err: any) {

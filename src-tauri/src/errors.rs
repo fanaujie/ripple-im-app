@@ -12,6 +12,12 @@ pub enum CommandError {
     RequestError(#[from] reqwest::Error),
     #[error("Invalid pkce verifier")]
     PkceVerifierError,
+    #[error(transparent)]
+    Base64DecodeError(#[from] base64::DecodeError),
+    #[error("Failed to split the JWT into parts")]
+    JWTSplitError,
+    #[error(transparent)]
+    AnyhowError(#[from] anyhow::Error),
 }
 
 impl serde::Serialize for CommandError {
