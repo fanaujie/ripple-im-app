@@ -1,17 +1,20 @@
 mod app_config;
-mod auth_token;
 mod commands;
 mod db;
 mod errors;
-mod oauth_client;
+mod file_utils;
+mod image_processor;
+mod ripple;
 mod server;
+use crate::ripple::token_store::TokenStore;
+use crate::ripple::RippleApi;
 use app_config::AppConfig;
 use db::DB;
-use oauth_client::OauthClient;
+use oauth2::reqwest;
+use ripple::oauth_client::OauthClient;
 use server::Server;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Arc;
 use tauri::path::BaseDirectory;
 use tauri::Manager;
 
@@ -36,23 +39,32 @@ pub fn run() {
                 .path()
                 .resolve(config_file_path, BaseDirectory::Resource)?;
             let app_config = parse_app_config(resource_path);
-            let oauth_client = Arc::new(tokio::sync::Mutex::new(OauthClient::new(&app_config)?));
+            let reqwest_client = reqwest::ClientBuilder::new()
+                .redirect(reqwest::redirect::Policy::none())
+                .build()?;
+            let oauth_client = OauthClient::new(&app_config, reqwest_client.clone())?;
             let db = tauri::async_runtime::block_on(DB::new(app_data_dir))?;
-            app.manage(tokio::sync::Mutex::new(db));
-            app.manage(oauth_client);
+            app.manage(RippleApi::new(
+                app_config.upload_gateway_url.clone(),
+                app_config.api_gateway_url.clone(),
+                reqwest_client,
+                TokenStore::new(oauth_client, db.clone()),
+            ));
+            app.manage(db);
             app.manage(app_config); // read-only, no mutex needed
             app.manage(tokio::sync::Mutex::new(Server::new()));
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::exists_token,
             commands::start_server,
             commands::stop_server,
             commands::open_signup_url,
             commands::open_auth_url,
+            commands::get_user_profile,
+            commands::update_user_avatar,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

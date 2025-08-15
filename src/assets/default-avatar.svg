@@ -1,0 +1,20 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle with gradient -->
+  <defs>
+    <linearGradient id="avatarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="64" fill="url(#avatarGradient)"/>
+  
+  <!-- User icon -->
+  <g transform="translate(32, 28)">
+    <!-- Head circle -->
+    <circle cx="32" cy="24" r="16" fill="white" opacity="0.9"/>
+    <!-- Body -->
+    <path d="M32 48C20 48 10 58 10 72V76C10 78.2091 11.7909 80 14 80H50C52.2091 80 54 78.2091 54 76V72C54 58 44 48 32 48Z" fill="white" opacity="0.9"/>
+  </g>
+</svg>

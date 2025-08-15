@@ -1,13 +1,9 @@
-use crate::auth_token::AuthToken;
-use crate::db::DB;
-use crate::oauth_client::OauthClient;
+use crate::ripple::RippleApi;
 use axum::extract::{Query, State};
 use axum::response::Html;
 use axum::routing::get;
 use axum::Router;
-use oauth2::TokenResponse;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::net::ToSocketAddrs;
@@ -117,44 +113,12 @@ async fn handler(
     State(api_state): State<ApiState>,
     Query(params): Query<CallbackParams>,
 ) -> Html<String> {
-    let client_state = api_state
-        .app_handle
-        .state::<Arc<tokio::sync::Mutex<OauthClient>>>();
-    let client = client_state.lock().await;
-    if !client.state_equal(&params.state) {
+    let ripple = api_state.app_handle.state::<RippleApi>();
+    if !ripple.oauth_state_equal(&params.state) {
         return Html(load_html_file(&api_state.app_handle, "invalid-state.html").await);
     }
-    match client.request_token(params.code).await {
-        Ok(token) => {
-            // save token
-            let dn_state = api_state.app_handle.state::<tokio::sync::Mutex<DB>>();
-            let db = dn_state.lock().await;
-            let _ = db
-                .save_token(
-                    token.access_token().secret(),
-                    token.refresh_token().unwrap().secret(),
-                )
-                .await
-                .expect("Failed to save token to database");
-            // let _ = match AuthToken::decode_jwt_payload(token.access_token().secret()) {
-            //     Ok(claims) => {
-            //         println!("Successfully verified the token claims: {:?}", claims);
-            //     }
-            //     Err(e) => {
-            //         println!("Failed to parse token: {}", e);
-            //         // Emit auth failure event to frontend
-            //         if let Err(e) = api_state.app_handle.emit(
-            //             "auth-result",
-            //             AuthenticationState {
-            //                 success: false,
-            //                 message: e.to_string(),
-            //             },
-            //         ) {
-            //             eprintln!("Failed to emit auth-result event: {}", e);
-            //         }
-            //         return Html(load_html_file(&api_state.app_handle, "auth-failed.html").await);
-            //     }
-            // };
+    match ripple.oauth_request_token(params.code).await {
+        Ok(_) => {
             // Emit auth success event to frontend
             if let Err(e) = api_state.app_handle.emit(
                 "auth-result",
@@ -171,7 +135,6 @@ async fn handler(
             Html(load_html_file(&api_state.app_handle, "auth-success.html").await)
         }
         Err(e) => {
-            println!("Error requesting token: {}", e);
             // Emit auth failure event to frontend
             if let Err(e) = api_state.app_handle.emit(
                 "auth-result",

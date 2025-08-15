@@ -5,5 +5,7 @@
   "oauth2_auth_url": "http://localhost:8080/oauth2/authorize",
   "oauth2_token_url": "http://localhost:8080/oauth2/token",
   "callback_server_addr": "localhost:8000",
-  "oauth2_redirect_uri": "http://localhost:8000/callback"
+  "oauth2_redirect_uri": "http://localhost:8000/callback",
+  "upload_gateway_url": "http://localhost:8084",
+  "api_gateway_url": "http://localhost:8083"
 }

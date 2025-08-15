@@ -11,4 +11,6 @@ pub struct AppConfig {
     pub oauth2_token_url: String,
     pub callback_server_addr: String,
     pub oauth2_redirect_uri: String,
+    pub upload_gateway_url : String,
+    pub api_gateway_url: String,
 }

@@ -6,16 +6,12 @@ pub enum CommandError {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Url(#[from] url::ParseError),
-    #[error("Failed to get the token")]
-    TokenError,
     #[error(transparent)]
     RequestError(#[from] reqwest::Error),
-    #[error("Invalid pkce verifier")]
-    PkceVerifierError,
+    #[error(transparent)]
+    OpenerError(#[from] tauri_plugin_opener::Error),
     #[error(transparent)]
     Base64DecodeError(#[from] base64::DecodeError),
-    #[error("Failed to split the JWT into parts")]
-    JWTSplitError,
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),
 }

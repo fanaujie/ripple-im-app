@@ -1,4 +1,4 @@
-use crate::errors::CommandError;
+use anyhow::anyhow;
 use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine as _};
 
 use serde::{Deserialize, Serialize};
@@ -29,17 +29,17 @@ pub struct Claims {
     scope: Vec<String>, // Optional. Scopes granted by the token
 }
 
-pub struct AuthToken();
+pub struct AuthTokenParser();
 
-impl AuthToken {
-    pub fn decode_jwt_payload(token: &str) -> Result<Claims, CommandError> {
+impl AuthTokenParser {
+    pub fn decode_jwt_payload(token: &str) -> anyhow::Result<Claims> {
         let parts: Vec<&str> = token.split('.').collect();
         if parts.len() != 3 {
-            return Err(CommandError::JWTSplitError);
+            return Err(anyhow!("Failed to split the JWT into parts"));
         }
         println!("Decoding JWT payload: {}", parts[1]);
         let payload = STANDARD_NO_PAD.decode(parts[1])?;
-        let claims: Claims = serde_json::from_slice(&payload).unwrap();
+        let claims: Claims = serde_json::from_slice(&payload)?;
         Ok(claims)
     }
 }
