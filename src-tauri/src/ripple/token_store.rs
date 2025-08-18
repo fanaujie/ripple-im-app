@@ -46,15 +46,28 @@ impl TokenStore {
     }
 
     pub async fn initialize_token_from_db(&self) -> anyhow::Result<bool> {
-        match self.db.get_token().await {
-            Ok(token) => {
-                let mut guard_token = self.token.write().unwrap();
-                *guard_token = Some(token);
-                Ok(true)
+        match self.db.exists_token().await {
+            Ok(exist) => {
+                if !exist {
+                    // No token exists in the database
+                    return Ok(false);
+                }
+                // Token exists in the database, load it
+                match self.db.get_token().await {
+                    Ok(token) => {
+                        let mut guard_token = self.token.write().unwrap();
+                        *guard_token = Some(token);
+                        Ok(true)
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to load token from DB: {}", e);
+                        Ok(false)
+                    }
+                }
             }
             Err(e) => {
-                eprintln!("Failed to initialize token from DB: {}", e);
-                Ok(false)
+                eprintln!("Failed to check token existence in DB: {}", e);
+                Err(anyhow!("Failed to initialize token from DB: {}", e))
             }
         }
     }
