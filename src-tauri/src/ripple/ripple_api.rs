@@ -1,4 +1,7 @@
-use crate::ripple::api_response::AvatarUploadResponse;
+use crate::ripple::api_paths::ApiPaths;
+use crate::ripple::api_response::{
+    AvatarUploadResponse, CommonResponse, UpdateNickNameRequest, UserProfileResponse,
+};
 use crate::ripple::token_store::TokenStore;
 use anyhow::anyhow;
 use mime::Mime;
@@ -8,8 +11,7 @@ use sha2::{Digest, Sha256};
 use std::future::Future;
 
 pub struct RippleApi {
-    upload_gateway_url: String,
-    api_gateway_url: String,
+    api_paths: ApiPaths,
     reqwest_client: reqwest::Client,
     token_store: TokenStore,
 }
@@ -21,9 +23,9 @@ impl RippleApi {
         reqwest_client: reqwest::Client,
         token_store: TokenStore,
     ) -> Self {
+        let api_paths = ApiPaths::new(&upload_gateway_url, &api_gateway_url);
         RippleApi {
-            upload_gateway_url,
-            api_gateway_url,
+            api_paths,
             reqwest_client,
             token_store,
         }
@@ -50,10 +52,21 @@ impl RippleApi {
                 StatusCode::UNAUTHORIZED => {
                     if attempts < unauthorized_max_retries {
                         attempts += 1;
-                        self.token_store.refresh_token().await?;
-                        continue;
+                        match self.token_store.refresh_token().await {
+                            Ok(_) => continue,
+                            Err(e) => {
+                                // If refresh fails, clear the invalid token
+                                let _ = self.token_store.clear_token().await;
+                                return Err(anyhow!(
+                                    "Token refresh failed: {}. Please login again.",
+                                    e
+                                ));
+                            }
+                        }
                     } else {
-                        return Err(anyhow!("Unauthorized access after {} attempts", attempts));
+                        // Clear invalid token after max retries
+                        let _ = self.token_store.clear_token().await;
+                        return Err(anyhow!("Authentication failed. Please login again."));
                     }
                 }
                 _ => {
@@ -104,7 +117,7 @@ impl RippleApi {
                             .text("hash", hex_hash)
                             .part("avatar", part);
                         self.reqwest_client
-                            .put(&format!("{}/api/upload/avatar", self.upload_gateway_url))
+                            .put(&self.api_paths.upload_avatar)
                             .header("Authorization", format!("Bearer {}", access_token))
                             .multipart(form)
                             .send()
@@ -116,5 +129,69 @@ impl RippleApi {
             )
             .await?;
         Ok(res.json::<AvatarUploadResponse>().await?)
+    }
+
+    pub async fn get_user_profile(&self) -> anyhow::Result<UserProfileResponse> {
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| async move {
+                    self.reqwest_client
+                        .get(&self.api_paths.profile)
+                        .header("Authorization", format!("Bearer {}", access_token))
+                        .send()
+                        .await
+                        .map_err(|e| anyhow!("Failed to get user profile: {}", e))
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<UserProfileResponse>().await?)
+    }
+
+    pub async fn update_nickname(&self, nickname: String) -> anyhow::Result<CommonResponse> {
+        let request_body = UpdateNickNameRequest {
+            nick_name: nickname,
+        };
+
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let request_body = request_body.clone();
+                    async move {
+                        self.reqwest_client
+                            .put(&self.api_paths.profile_nickname)
+                            .header("Authorization", format!("Bearer {}", access_token))
+                            .header("Content-Type", "application/json")
+                            .json(&request_body)
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to update nickname: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<CommonResponse>().await?)
+    }
+
+    pub async fn delete_user_portrait(&self) -> anyhow::Result<CommonResponse> {
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| async move {
+                    self.reqwest_client
+                        .delete(&self.api_paths.profile_portrait)
+                        .header("Authorization", format!("Bearer {}", access_token))
+                        .send()
+                        .await
+                        .map_err(|e| anyhow!("Failed to delete user portrait: {}", e))
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<CommonResponse>().await?)
+    }
+
+    pub async fn clear_invalid_token(&self) -> anyhow::Result<()> {
+        self.token_store.clear_token().await
     }
 }

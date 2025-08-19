@@ -66,7 +66,7 @@ export interface MessagesReadEvent {
 export interface UserProfile {
     user_id: string;
     nickname: string;
-    avatar_path: string;
+    avatar_path?: string;
 }
 
 export interface UpdateAvatarResponse {

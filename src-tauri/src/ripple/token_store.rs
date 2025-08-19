@@ -88,15 +88,35 @@ impl TokenStore {
             guard_token.as_ref().unwrap().1.clone()
         };
         match self.oauth_client.refresh_token(refresh_token).await {
-            Ok(token) => self
-                .db
-                .save_token(
-                    token.access_token().secret(),
-                    token.refresh_token().unwrap().secret(),
-                )
-                .await
-                .map(|_| ()),
+            Ok(token) => {
+                let new_access_token = token.access_token().secret().to_string();
+                let new_refresh_token = token.refresh_token().unwrap().secret().to_string();
+                
+                // Save to database first
+                match self.db.save_token(&new_access_token, &new_refresh_token).await {
+                    Ok(_) => {
+                        // Update memory state only if database save succeeds
+                        let mut guard_token = self.token.write().unwrap();
+                        *guard_token = Some((new_access_token, new_refresh_token));
+                        Ok(())
+                    }
+                    Err(e) => Err(anyhow!("Failed to save refreshed token to database: {}", e)),
+                }
+            }
             Err(e) => Err(anyhow!("Failed to refresh token: {}", e.to_string())),
         }
+    }
+
+    pub async fn clear_token(&self) -> anyhow::Result<()> {
+        // Clear memory state
+        {
+            let mut guard_token = self.token.write().unwrap();
+            *guard_token = None;
+        }
+        
+        // Clear database tokens
+        self.db.clear_tokens().await?;
+        
+        Ok(())
     }
 }

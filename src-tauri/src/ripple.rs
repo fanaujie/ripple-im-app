@@ -1,3 +1,4 @@
+mod api_paths;
 mod api_response;
 mod auth_token_parser;
 pub mod oauth_client;

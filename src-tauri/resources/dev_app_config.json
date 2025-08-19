@@ -7,5 +7,5 @@
   "callback_server_addr": "localhost:8000",
   "oauth2_redirect_uri": "http://localhost:8000/callback",
   "upload_gateway_url": "http://localhost:8084",
-  "api_gateway_url": "http://localhost:8083"
+  "api_gateway_url": "http://localhost:8085"
 }

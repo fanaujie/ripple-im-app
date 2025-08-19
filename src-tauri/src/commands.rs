@@ -54,13 +54,18 @@ pub fn open_auth_url(app: AppHandle) -> Result<(), errors::CommandError> {
 }
 
 #[tauri::command]
-pub async fn get_user_profile(user_id: String) -> Result<UserProfile, errors::CommandError> {
-    let mock_profile = UserProfile {
-        user_id,
-        nickname: "Test User".to_string(),
-        avatar_path: None,
+pub async fn get_user_profile(
+    state_ripple: State<'_, RippleApi>,
+) -> Result<UserProfile, errors::CommandError> {
+    let response = state_ripple.get_user_profile().await?;
+
+    let profile = UserProfile {
+        user_id: response.data.account,
+        nickname: response.data.nick_name,
+        avatar_path: response.data.user_portrait,
     };
-    Ok(mock_profile)
+
+    Ok(profile)
 }
 
 #[tauri::command]
@@ -87,4 +92,21 @@ pub async fn update_user_avatar(
         .upload_avatar(filename.to_string(), crop_img.0, crop_img.1)
         .await?;
     Ok(res.data.avatar_url)
+}
+
+#[tauri::command]
+pub async fn update_user_nickname(
+    nickname: String,
+    state_ripple: State<'_, RippleApi>,
+) -> Result<bool, errors::CommandError> {
+    let response = state_ripple.update_nickname(nickname).await?;
+    Ok(response.code == 200)
+}
+
+#[tauri::command]
+pub async fn remove_user_avatar(
+    state_ripple: State<'_, RippleApi>,
+) -> Result<bool, errors::CommandError> {
+    let response = state_ripple.delete_user_portrait().await?;
+    Ok(response.code == 200)
 }

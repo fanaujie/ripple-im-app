@@ -227,7 +227,7 @@ defineOptions({
 
 // Refs
 const userProfile = ref<UserProfile | null>(null);
-const userId = ref<string>('user_1'); // Mock user ID for now
+const userId = ref<string>(''); // Will be loaded from API
 const nicknameInput = ref<string>('');
 const isUpdating = ref<boolean>(false);
 const isEditingNickname = ref<boolean>(false);
@@ -253,15 +253,18 @@ const errorMessage = ref<string>('');
 // Methods
 const loadUserProfile = async () => {
   try {
-    const profile = await invoke<UserProfile | null>('get_user_profile', {
-      userId: userId.value
-    });
+    const profile = await invoke<UserProfile | null>('get_user_profile');
 
     userProfile.value = profile;
-    nicknameInput.value = profile.nickname;
+    if (profile) {
+      nicknameInput.value = profile.nickname;
+      userId.value = profile.user_id;
+    }
 
   } catch (error) {
     console.error('Failed to load user profile:', error);
+    showErrorDialog.value = true;
+    errorMessage.value = error instanceof Error ? error.message : String(error);
   }
 };
 
@@ -282,7 +285,6 @@ const saveNickname = async () => {
   isUpdating.value = true;
   try {
     const success = await invoke<boolean>('update_user_nickname', {
-      userId: userId.value,
       nickname: nicknameInput.value.trim()
     });
 
@@ -531,10 +533,7 @@ const removeAvatar = async () => {
 
   isUpdating.value = true;
   try {
-    const success = await invoke<boolean>('remove_user_avatar', {
-      userId: userId.value,
-      currentAvatarPath: userProfile.value?.avatar_path
-    });
+    const success = await invoke<boolean>('remove_user_avatar');
 
     if (success) {
       await loadUserProfile();

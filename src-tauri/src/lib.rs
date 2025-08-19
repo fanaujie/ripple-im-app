@@ -65,6 +65,8 @@ pub fn run() {
             commands::open_auth_url,
             commands::get_user_profile,
             commands::update_user_avatar,
+            commands::update_user_nickname,
+            commands::remove_user_avatar,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -112,4 +112,12 @@ INSERT INTO oauth_tokens ( access_token,refresh_token ) VALUES ( ?, ? )
         migrator.run(&pool).await?;
         Ok(pool)
     }
+
+    pub async fn clear_tokens(&self) -> anyhow::Result<()> {
+        sqlx::query("DELETE FROM oauth_tokens")
+            .execute(&self.pool)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to clear tokens from database: {}", e))?;
+        Ok(())
+    }
 }
