@@ -110,3 +110,148 @@ pub async fn remove_user_avatar(
     let response = state_ripple.delete_user_portrait().await?;
     Ok(response.code == 200)
 }
+
+#[tauri::command]
+pub async fn send_friend_request(
+    account: String,
+    _state_ripple: State<'_, RippleApi>,
+) -> Result<bool, errors::CommandError> {
+    // Mock implementation - always return success
+    println!("Mock: Send friend request to {}", account);
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn handle_friend_request(
+    request_id: String,
+    accept: bool,
+    _state_ripple: State<'_, RippleApi>,
+) -> Result<bool, errors::CommandError> {
+    // Mock implementation - always return success
+    println!("Mock: Handle friend request {} - accept: {}", request_id, accept);
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn get_friend_requests(
+    _state_ripple: State<'_, RippleApi>,
+) -> Result<serde_json::Value, errors::CommandError> {
+    // Mock friend requests data
+    let mock_requests = serde_json::json!([
+        {
+            "id": "req1",
+            "fromAccount": "dave@example.com",
+            "toAccount": "me@example.com",
+            "fromNickName": "Dave",
+            "fromAvatar": "https://via.placeholder.com/64",
+            "status": "pending",
+            "createdAt": "2024-01-15T10:30:00Z"
+        },
+        {
+            "id": "req2",
+            "fromAccount": "eve@example.com",
+            "toAccount": "me@example.com",
+            "fromNickName": "Eve",
+            "fromAvatar": null,
+            "status": "pending",
+            "createdAt": "2024-01-14T15:20:00Z"
+        }
+    ]);
+    Ok(mock_requests)
+}
+
+#[tauri::command]
+pub async fn get_sent_requests(
+    _state_ripple: State<'_, RippleApi>,
+) -> Result<serde_json::Value, errors::CommandError> {
+    // Mock sent requests data
+    let mock_sent_requests = serde_json::json!([
+        {
+            "id": "sent1",
+            "fromAccount": "me@example.com",
+            "toAccount": "frank@example.com",
+            "fromNickName": "Me",
+            "fromAvatar": "https://via.placeholder.com/64",
+            "status": "pending",
+            "createdAt": "2024-01-16T09:00:00Z"
+        }
+    ]);
+    Ok(mock_sent_requests)
+}
+
+#[tauri::command]
+pub async fn get_friends_list(
+    _state_ripple: State<'_, RippleApi>,
+) -> Result<serde_json::Value, errors::CommandError> {
+    // Mock friends list data
+    let mock_friends = serde_json::json!([
+        {
+            "account": "alice@example.com",
+            "nickName": "Alice",
+            "avatar": "https://via.placeholder.com/64"
+        },
+        {
+            "account": "bob@example.com", 
+            "nickName": "Bob",
+            "avatar": null
+        },
+        {
+            "account": "charlie@example.com",
+            "nickName": "Charlie", 
+            "avatar": "https://via.placeholder.com/64"
+        }
+    ]);
+    Ok(mock_friends)
+}
+
+#[tauri::command]
+pub async fn remove_friend(
+    friend_account: String,
+    _state_ripple: State<'_, RippleApi>,
+) -> Result<bool, errors::CommandError> {
+    // Mock implementation - always return success
+    println!("Mock: Remove friend {}", friend_account);
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn search_friends(
+    keyword: String,
+    _state_ripple: State<'_, RippleApi>,
+) -> Result<serde_json::Value, errors::CommandError> {
+    // Mock search implementation - filter friends by keyword
+    let all_friends = serde_json::json!([
+        {
+            "account": "alice@example.com",
+            "nickName": "Alice",
+            "avatar": "https://via.placeholder.com/64"
+        },
+        {
+            "account": "bob@example.com", 
+            "nickName": "Bob",
+            "avatar": null
+        },
+        {
+            "account": "charlie@example.com",
+            "nickName": "Charlie", 
+            "avatar": "https://via.placeholder.com/64"
+        }
+    ]);
+    
+    // Simple filtering based on keyword
+    let filtered_friends: Vec<serde_json::Value> = all_friends
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|friend| {
+            friend["nickName"]
+                .as_str()
+                .unwrap()
+                .to_lowercase()
+                .contains(&keyword.to_lowercase())
+        })
+        .cloned()
+        .collect();
+    
+    Ok(serde_json::json!(filtered_friends))
+}

@@ -67,6 +67,13 @@ pub fn run() {
             commands::update_user_avatar,
             commands::update_user_nickname,
             commands::remove_user_avatar,
+            commands::send_friend_request,
+            commands::handle_friend_request,
+            commands::get_friend_requests,
+            commands::get_sent_requests,
+            commands::get_friends_list,
+            commands::remove_friend,
+            commands::search_friends,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
