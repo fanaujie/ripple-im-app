@@ -20,7 +20,7 @@
               <div class="relative group">
                 <div
                     class="w-20 h-20 rounded-full overflow-hidden bg-muted border-2 border-border flex items-center justify-center transition-all duration-200 group-hover:border-primary/50">
-                  <img :src="avatarPreview || getAvatarUrl(userProfile?.avatar_path)"
+                  <img :src="avatarPreview || getAvatarUrl(userProfile?.avatar)"
                        alt="Profile Image"
                        class="w-full h-full object-cover"
                        @error="onImageError">
@@ -41,14 +41,14 @@
                 <div class="flex space-x-3">
                   <button @click="selectFile"
                           :disabled="isUpdating"
-                          :title="userProfile?.avatar_path ? 'Change Profile Image' : 'Upload Profile Image'"
+                          :title="userProfile?.avatar ? 'Change Profile Image' : 'Upload Profile Image'"
                           class="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                     </svg>
                   </button>
-                  <button v-if="userProfile?.avatar_path"
+                  <button v-if="userProfile?.avatar"
                           @click="removeAvatar"
                           :disabled="isUpdating"
                           title="Remove Profile Image"
@@ -70,7 +70,7 @@
             <div class="flex-1 flex items-center space-x-3">
               <!-- Display Mode -->
               <div v-if="!isEditingNickname" class="flex-1 flex items-center space-x-3">
-                <span class="px-4 py-2.5 text-text">{{ userProfile?.nickname || 'Not set' }}</span>
+                <span class="px-4 py-2.5 text-text">{{ userProfile?.nickName || 'Not set' }}</span>
                 <button @click="startEditingNickname"
                         class="p-1.5 text-muted-foreground hover:text-text transition-colors">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -217,7 +217,7 @@
 import {ref, onMounted, nextTick} from 'vue';
 import {invoke, convertFileSrc} from '@tauri-apps/api/core';
 import {open} from '@tauri-apps/plugin-dialog';
-import type {UserProfile} from '../types/app-state';
+import type {UserProfileData} from '../types/app-state';
 import defaultAvatarUrl from '../assets/default-avatar.svg';
 
 // Define component name for KeepAlive
@@ -226,8 +226,8 @@ defineOptions({
 });
 
 // Refs
-const userProfile = ref<UserProfile | null>(null);
-const userId = ref<string>(''); // Will be loaded from API
+const userProfile = ref<UserProfileData | null>(null);
+const userId = ref<number>(0); // Will be loaded from API
 const nicknameInput = ref<string>('');
 const isUpdating = ref<boolean>(false);
 const isEditingNickname = ref<boolean>(false);
@@ -253,12 +253,12 @@ const errorMessage = ref<string>('');
 // Methods
 const loadUserProfile = async () => {
   try {
-    const profile = await invoke<UserProfile | null>('get_user_profile');
+    const profile = await invoke<UserProfileData | null>('get_user_profile');
 
     userProfile.value = profile;
     if (profile) {
-      nicknameInput.value = profile.nickname;
-      userId.value = profile.user_id;
+      nicknameInput.value = profile.nickName;
+      userId.value = profile.userId;
     }
 
   } catch (error) {
@@ -271,12 +271,12 @@ const loadUserProfile = async () => {
 
 const startEditingNickname = () => {
   isEditingNickname.value = true;
-  nicknameInput.value = userProfile.value?.nickname || '';
+  nicknameInput.value = userProfile.value?.nickName || '';
 };
 
 const cancelEditingNickname = () => {
   isEditingNickname.value = false;
-  nicknameInput.value = userProfile.value?.nickname || '';
+  nicknameInput.value = userProfile.value?.nickName || '';
 };
 
 const saveNickname = async () => {
@@ -312,7 +312,7 @@ const selectFile = async () => {
         }
       ]
     });
-    
+
     if (selected) {
       await handleFileSelected(selected as string);
     }
@@ -515,7 +515,7 @@ const saveAvatar = async () => {
 
     // Update user profile with new image URL
     if (userProfile.value) {
-      userProfile.value.avatar_path = imageUrl;
+      userProfile.value.avatar = imageUrl;
     }
 
     closePreviewDialog();

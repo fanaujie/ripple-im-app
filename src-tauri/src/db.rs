@@ -1,17 +1,10 @@
 use keyring::Entry;
-use serde::{Deserialize, Serialize};
 use sqlx::sqlite;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
 use std::path::PathBuf;
 use std::str::FromStr;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct UserProfile {
-    pub user_id: String,
-    pub nickname: String,
-    pub avatar_path: Option<String>,
-}
 pub struct DB {
     pool: sqlite::SqlitePool,
 }

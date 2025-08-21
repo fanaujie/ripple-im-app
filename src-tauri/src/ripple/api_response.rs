@@ -13,13 +13,13 @@ pub struct AvatarUploadResponse {
     pub data: AvatarUploadData,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct UserProfileData {
-    pub account: String,
+    #[serde(rename = "userId")]
+    pub user_id: i64,
     #[serde(rename = "nickName")]
     pub nick_name: String,
-    #[serde(rename = "userPortrait")]
-    pub user_portrait: Option<String>,
+    pub avatar: Option<String>,
 }
 
 #[derive(Deserialize)]

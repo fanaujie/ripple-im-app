@@ -63,13 +63,8 @@ export interface MessagesReadEvent {
 }
 
 // User Profile Types
-export interface UserProfile {
-    user_id: string;
-    nickname: string;
-    avatar_path?: string;
-}
-
-export interface UpdateAvatarResponse {
-    success: boolean;
-    avatar_path?: string;
+export interface UserProfileData {
+    userId: number;
+    nickName: string;
+    avatar?: string;
 }

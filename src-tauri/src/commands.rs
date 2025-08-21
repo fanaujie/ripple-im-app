@@ -1,9 +1,9 @@
 use crate::app_config::AppConfig;
 use std::path::Path;
 
-use crate::db::UserProfile;
 use crate::errors;
 use crate::image_processor::ImageProcessor;
+use crate::ripple::api_response::UserProfileData;
 use crate::ripple::RippleApi;
 use crate::server::Server;
 use tauri::{AppHandle, Manager, State};
@@ -56,16 +56,9 @@ pub fn open_auth_url(app: AppHandle) -> Result<(), errors::CommandError> {
 #[tauri::command]
 pub async fn get_user_profile(
     state_ripple: State<'_, RippleApi>,
-) -> Result<UserProfile, errors::CommandError> {
+) -> Result<UserProfileData, errors::CommandError> {
     let response = state_ripple.get_user_profile().await?;
-
-    let profile = UserProfile {
-        user_id: response.data.account,
-        nickname: response.data.nick_name,
-        avatar_path: response.data.user_portrait,
-    };
-
-    Ok(profile)
+    Ok(response.data)
 }
 
 #[tauri::command]
@@ -128,7 +121,10 @@ pub async fn handle_friend_request(
     _state_ripple: State<'_, RippleApi>,
 ) -> Result<bool, errors::CommandError> {
     // Mock implementation - always return success
-    println!("Mock: Handle friend request {} - accept: {}", request_id, accept);
+    println!(
+        "Mock: Handle friend request {} - accept: {}",
+        request_id, accept
+    );
     Ok(true)
 }
 
@@ -191,13 +187,13 @@ pub async fn get_friends_list(
             "avatar": "https://via.placeholder.com/64"
         },
         {
-            "account": "bob@example.com", 
+            "account": "bob@example.com",
             "nickName": "Bob",
             "avatar": null
         },
         {
             "account": "charlie@example.com",
-            "nickName": "Charlie", 
+            "nickName": "Charlie",
             "avatar": "https://via.placeholder.com/64"
         }
     ]);
@@ -227,17 +223,17 @@ pub async fn search_friends(
             "avatar": "https://via.placeholder.com/64"
         },
         {
-            "account": "bob@example.com", 
+            "account": "bob@example.com",
             "nickName": "Bob",
             "avatar": null
         },
         {
             "account": "charlie@example.com",
-            "nickName": "Charlie", 
+            "nickName": "Charlie",
             "avatar": "https://via.placeholder.com/64"
         }
     ]);
-    
+
     // Simple filtering based on keyword
     let filtered_friends: Vec<serde_json::Value> = all_friends
         .as_array()
@@ -252,6 +248,6 @@ pub async fn search_friends(
         })
         .cloned()
         .collect();
-    
+
     Ok(serde_json::json!(filtered_friends))
 }
