@@ -1,11 +1,11 @@
 {
-  "signup_url": "http://localhost:8080/signup",
+  "signup_url": "http://localhost:10001/signup",
   "oauth2_client_id": "ripple-im-desktop",
   "oauth2_client_secret": "ripple",
-  "oauth2_auth_url": "http://localhost:8080/oauth2/authorize",
-  "oauth2_token_url": "http://localhost:8080/oauth2/token",
+  "oauth2_auth_url": "http://localhost:10001/oauth2/authorize",
+  "oauth2_token_url": "http://localhost:10001/oauth2/token",
   "callback_server_addr": "localhost:8000",
   "oauth2_redirect_uri": "http://localhost:8000/callback",
-  "upload_gateway_url": "http://localhost:8084",
-  "api_gateway_url": "http://localhost:8085"
+  "upload_gateway_url": "http://localhost:10003",
+  "api_gateway_url": "http://localhost:10002"
 }

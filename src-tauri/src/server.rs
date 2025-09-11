@@ -1,4 +1,6 @@
 use crate::ripple::RippleApi;
+use crate::store_engine::{MemoryStore, StoreEngine};
+use crate::DefaultStoreEngine;
 use axum::extract::{Query, State};
 use axum::response::Html;
 use axum::routing::get;
@@ -113,7 +115,9 @@ async fn handler(
     State(api_state): State<ApiState>,
     Query(params): Query<CallbackParams>,
 ) -> Html<String> {
-    let ripple = api_state.app_handle.state::<RippleApi>();
+    let ripple = api_state
+        .app_handle
+        .state::<RippleApi<DefaultStoreEngine>>();
     if !ripple.oauth_state_equal(&params.state) {
         return Html(load_html_file(&api_state.app_handle, "invalid-state.html").await);
     }

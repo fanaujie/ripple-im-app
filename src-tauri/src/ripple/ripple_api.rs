@@ -2,32 +2,42 @@ use crate::ripple::api_paths::ApiPaths;
 use crate::ripple::api_response::{
     AvatarUploadResponse, CommonResponse, UpdateNickNameRequest, UserProfileResponse,
 };
-use crate::ripple::token_store::TokenStore;
+use crate::ripple::oauth_client::OauthClient;
+use crate::store_engine::StoreEngine;
 use anyhow::anyhow;
 use mime::Mime;
-use oauth2::reqwest;
+use oauth2::{reqwest, TokenResponse};
 use reqwest::{Response, StatusCode};
 use sha2::{Digest, Sha256};
 use std::future::Future;
 
-pub struct RippleApi {
+pub struct RippleApi<E>
+where
+    E: StoreEngine + Sync + Send,
+{
     api_paths: ApiPaths,
     reqwest_client: reqwest::Client,
-    token_store: TokenStore,
+    oauth_client: OauthClient,
+    store_engine: E,
 }
 
-impl RippleApi {
+impl<E> RippleApi<E>
+where
+    E: StoreEngine + Sync + Send,
+{
     pub fn new(
         upload_gateway_url: String,
         api_gateway_url: String,
         reqwest_client: reqwest::Client,
-        token_store: TokenStore,
+        oauth_client: OauthClient,
+        store_engine: E,
     ) -> Self {
         let api_paths = ApiPaths::new(&upload_gateway_url, &api_gateway_url);
         RippleApi {
             api_paths,
             reqwest_client,
-            token_store,
+            oauth_client,
+            store_engine,
         }
     }
 
@@ -42,21 +52,28 @@ impl RippleApi {
     {
         let mut attempts = 0u8;
         loop {
-            let access_token = self
-                .token_store
-                .get_access_token()
+            let token = self
+                .store_engine
+                .get_token()
+                .await
                 .ok_or(anyhow!("Failed to retrieve access token"))?;
-            let res = api_call(access_token).await?;
+            let res = api_call(token.access_token).await?;
             match res.status() {
                 StatusCode::OK => return Ok(res),
                 StatusCode::UNAUTHORIZED => {
                     if attempts < unauthorized_max_retries {
                         attempts += 1;
-                        match self.token_store.refresh_token().await {
-                            Ok(_) => continue,
+                        match self.oauth_client.refresh_token(token.refresh_token).await {
+                            Ok(token_response) => {
+                                self.store_engine
+                                    .save_token(
+                                        token_response.access_token().secret(),
+                                        token_response.refresh_token().unwrap().secret(),
+                                    )
+                                    .await?;
+                                continue;
+                            }
                             Err(e) => {
-                                // If refresh fails, clear the invalid token
-                                let _ = self.token_store.clear_token().await;
                                 return Err(anyhow!(
                                     "Token refresh failed: {}. Please login again.",
                                     e
@@ -65,7 +82,7 @@ impl RippleApi {
                         }
                     } else {
                         // Clear invalid token after max retries
-                        let _ = self.token_store.clear_token().await;
+
                         return Err(anyhow!("Authentication failed. Please login again."));
                     }
                 }
@@ -79,20 +96,26 @@ impl RippleApi {
         }
     }
 
-    pub async fn initialize_token_from_db(&self) -> anyhow::Result<bool> {
-        self.token_store.initialize_token_from_db().await
-    }
-
     pub fn oauth_auth_url(&self) -> String {
-        self.token_store.auth_url()
+        self.oauth_client.auth_url()
     }
 
     pub fn oauth_state_equal(&self, state: &str) -> bool {
-        self.token_store.state_equal(state)
+        self.oauth_client.state_equal(state)
     }
 
     pub async fn oauth_request_token(&self, code: String) -> anyhow::Result<()> {
-        self.token_store.request_token(code).await
+        match self.oauth_client.request_token(code).await {
+            Ok(token_response) => {
+                self.store_engine
+                    .save_token(
+                        token_response.access_token().secret(),
+                        token_response.refresh_token().unwrap().secret(),
+                    )
+                    .await
+            }
+            Err(e) => Err(anyhow!("Failed to request token: {}", e.to_string())),
+        }
     }
 
     pub async fn upload_avatar(
@@ -189,9 +212,5 @@ impl RippleApi {
             )
             .await?;
         Ok(res.json::<CommonResponse>().await?)
-    }
-
-    pub async fn clear_invalid_token(&self) -> anyhow::Result<()> {
-        self.token_store.clear_token().await
     }
 }

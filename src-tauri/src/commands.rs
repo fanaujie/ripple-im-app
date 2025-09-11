@@ -1,19 +1,20 @@
 use crate::app_config::AppConfig;
 use std::path::Path;
 
-use crate::errors;
 use crate::image_processor::ImageProcessor;
 use crate::ripple::api_response::UserProfileData;
 use crate::ripple::RippleApi;
 use crate::server::Server;
+use crate::store_engine::StoreEngine;
+use crate::{errors, DefaultStoreEngine};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
 pub async fn exists_token(
-    state_ripple: State<'_, RippleApi>,
+    state_ripple: State<'_, DefaultStoreEngine>,
 ) -> Result<bool, errors::CommandError> {
-    Ok(state_ripple.initialize_token_from_db().await?)
+    Ok(state_ripple.exists_token().await?)
 }
 
 #[tauri::command]
@@ -47,7 +48,7 @@ pub fn open_signup_url(app: AppHandle) -> Result<(), errors::CommandError> {
 
 #[tauri::command]
 pub fn open_auth_url(app: AppHandle) -> Result<(), errors::CommandError> {
-    let ripple = app.state::<RippleApi>();
+    let ripple = app.state::<RippleApi<DefaultStoreEngine>>();
     Ok(app
         .opener()
         .open_url(ripple.oauth_auth_url(), None::<&str>)?)
@@ -55,7 +56,7 @@ pub fn open_auth_url(app: AppHandle) -> Result<(), errors::CommandError> {
 
 #[tauri::command]
 pub async fn get_user_profile(
-    state_ripple: State<'_, RippleApi>,
+    state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<UserProfileData, errors::CommandError> {
     let response = state_ripple.get_user_profile().await?;
     Ok(response.data)
@@ -70,7 +71,7 @@ pub async fn update_user_avatar(
     width: f64,
     height: f64,
 ) -> Result<String, errors::CommandError> {
-    let ripple = app.state::<RippleApi>();
+    let ripple = app.state::<RippleApi<DefaultStoreEngine>>();
     let filepath = Path::new(&upload_filepath);
     let filename = crate::file_utils::FileUtils::get_file_name(filepath)
         .ok_or(anyhow::anyhow!("Invalid file path"))?;
@@ -90,7 +91,7 @@ pub async fn update_user_avatar(
 #[tauri::command]
 pub async fn update_user_nickname(
     nickname: String,
-    state_ripple: State<'_, RippleApi>,
+    state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<bool, errors::CommandError> {
     let response = state_ripple.update_nickname(nickname).await?;
     Ok(response.code == 200)
@@ -98,7 +99,7 @@ pub async fn update_user_nickname(
 
 #[tauri::command]
 pub async fn remove_user_avatar(
-    state_ripple: State<'_, RippleApi>,
+    state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<bool, errors::CommandError> {
     let response = state_ripple.delete_user_portrait().await?;
     Ok(response.code == 200)
@@ -107,7 +108,7 @@ pub async fn remove_user_avatar(
 #[tauri::command]
 pub async fn send_friend_request(
     account: String,
-    _state_ripple: State<'_, RippleApi>,
+    _state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<bool, errors::CommandError> {
     // Mock implementation - always return success
     println!("Mock: Send friend request to {}", account);
@@ -118,7 +119,7 @@ pub async fn send_friend_request(
 pub async fn handle_friend_request(
     request_id: String,
     accept: bool,
-    _state_ripple: State<'_, RippleApi>,
+    _state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<bool, errors::CommandError> {
     // Mock implementation - always return success
     println!(
@@ -130,7 +131,7 @@ pub async fn handle_friend_request(
 
 #[tauri::command]
 pub async fn get_friend_requests(
-    _state_ripple: State<'_, RippleApi>,
+    _state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<serde_json::Value, errors::CommandError> {
     // Mock friend requests data
     let mock_requests = serde_json::json!([
@@ -158,7 +159,7 @@ pub async fn get_friend_requests(
 
 #[tauri::command]
 pub async fn get_sent_requests(
-    _state_ripple: State<'_, RippleApi>,
+    _state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<serde_json::Value, errors::CommandError> {
     // Mock sent requests data
     let mock_sent_requests = serde_json::json!([
@@ -177,7 +178,7 @@ pub async fn get_sent_requests(
 
 #[tauri::command]
 pub async fn get_friends_list(
-    _state_ripple: State<'_, RippleApi>,
+    _state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<serde_json::Value, errors::CommandError> {
     // Mock friends list data
     let mock_friends = serde_json::json!([
@@ -203,7 +204,7 @@ pub async fn get_friends_list(
 #[tauri::command]
 pub async fn remove_friend(
     friend_account: String,
-    _state_ripple: State<'_, RippleApi>,
+    _state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<bool, errors::CommandError> {
     // Mock implementation - always return success
     println!("Mock: Remove friend {}", friend_account);
@@ -213,7 +214,7 @@ pub async fn remove_friend(
 #[tauri::command]
 pub async fn search_friends(
     keyword: String,
-    _state_ripple: State<'_, RippleApi>,
+    _state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<serde_json::Value, errors::CommandError> {
     // Mock search implementation - filter friends by keyword
     let all_friends = serde_json::json!([

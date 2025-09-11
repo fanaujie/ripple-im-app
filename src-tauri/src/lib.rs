@@ -6,8 +6,11 @@ mod file_utils;
 mod image_processor;
 mod ripple;
 mod server;
-use crate::ripple::token_store::TokenStore;
+
+mod store_engine;
+mod store_engine_sqlite;
 use crate::ripple::RippleApi;
+use crate::store_engine::{MemoryStore, StoreEngine};
 use app_config::AppConfig;
 use db::DB;
 use oauth2::reqwest;
@@ -16,7 +19,10 @@ use server::Server;
 use std::fs;
 use std::path::PathBuf;
 use tauri::path::BaseDirectory;
-use tauri::Manager;
+use tauri::{async_runtime, Manager};
+
+#[cfg(feature = "memory-store")]
+type DefaultStoreEngine = MemoryStore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -41,16 +47,18 @@ pub fn run() {
             let app_config = parse_app_config(resource_path);
             let reqwest_client = reqwest::ClientBuilder::new()
                 .redirect(reqwest::redirect::Policy::none())
+                .proxy(reqwest::Proxy::http("http://192.168.50.31:9999")?)
                 .build()?;
             let oauth_client = OauthClient::new(&app_config, reqwest_client.clone())?;
-            let db = tauri::async_runtime::block_on(DB::new(app_data_dir))?;
+            let store = create_store();
             app.manage(RippleApi::new(
                 app_config.upload_gateway_url.clone(),
                 app_config.api_gateway_url.clone(),
                 reqwest_client,
-                TokenStore::new(oauth_client, db.clone()),
+                oauth_client,
+                store.clone(),
             ));
-            app.manage(db);
+            app.manage(store);
             app.manage(app_config); // read-only, no mutex needed
             app.manage(tokio::sync::Mutex::new(Server::new()));
             Ok(())
@@ -85,4 +93,9 @@ fn parse_app_config(resource_path: PathBuf) -> AppConfig {
         serde_json::from_str(&file_content).expect("Failed to parse app config JSON");
     app_config.is_dev = cfg!(debug_assertions);
     app_config
+}
+
+#[cfg(feature = "memory-store")]
+fn create_store() -> DefaultStoreEngine {
+    MemoryStore::new()
 }
