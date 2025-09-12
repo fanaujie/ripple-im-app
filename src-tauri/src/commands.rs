@@ -1,13 +1,14 @@
 use crate::app_config::AppConfig;
 use std::path::Path;
 
+use crate::file_utils::FileUtils;
 use crate::image_processor::ImageProcessor;
 use crate::ripple::api_response::UserProfileData;
 use crate::ripple::RippleApi;
 use crate::server::Server;
 use crate::store_engine::StoreEngine;
 use crate::{errors, DefaultStoreEngine};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
@@ -59,7 +60,15 @@ pub async fn get_user_profile(
     state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<UserProfileData, errors::CommandError> {
     let response = state_ripple.get_user_profile().await?;
-    Ok(response.data)
+    if response.code == 200 {
+        Ok(response.data)
+    } else {
+        Err(errors::CommandError::RippleAPIError(
+            "get_user_profile".to_string(),
+            response.code,
+            response.message,
+        ))
+    }
 }
 
 #[tauri::command]
@@ -70,11 +79,11 @@ pub async fn update_user_avatar(
     y: f64,
     width: f64,
     height: f64,
-) -> Result<String, errors::CommandError> {
+) -> Result<(), errors::CommandError> {
     let ripple = app.state::<RippleApi<DefaultStoreEngine>>();
     let filepath = Path::new(&upload_filepath);
-    let filename = crate::file_utils::FileUtils::get_file_name(filepath)
-        .ok_or(anyhow::anyhow!("Invalid file path"))?;
+    let filename =
+        FileUtils::get_file_name(filepath).ok_or(anyhow::anyhow!("Invalid file path"))?;
     let crop_img = ImageProcessor::new().crop_image(
         filepath,
         x as u32,
@@ -85,24 +94,59 @@ pub async fn update_user_avatar(
     let res = ripple
         .upload_avatar(filename.to_string(), crop_img.0, crop_img.1)
         .await?;
-    Ok(res.data.avatar_url)
+    if res.code == 200 {
+        // Emit updated user profile
+        let profile_response = ripple.get_user_profile().await?;
+        let _ = app.emit("user-profile-updated", &profile_response.data);
+        Ok(())
+    } else {
+        Err(errors::CommandError::RippleAPIError(
+            "upload_avatar".to_string(),
+            res.code,
+            res.message,
+        ))
+    }
 }
 
 #[tauri::command]
 pub async fn update_user_nickname(
+    app: AppHandle,
     nickname: String,
     state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
-) -> Result<bool, errors::CommandError> {
+) -> Result<(), errors::CommandError> {
     let response = state_ripple.update_nickname(nickname).await?;
-    Ok(response.code == 200)
+    if response.code == 200 {
+        // Emit updated user profile
+        let profile_response = state_ripple.get_user_profile().await?;
+        let _ = app.emit("user-profile-updated", &profile_response.data);
+        Ok(())
+    } else {
+        Err(errors::CommandError::RippleAPIError(
+            "update_nickname".to_string(),
+            response.code,
+            response.message,
+        ))
+    }
 }
 
 #[tauri::command]
 pub async fn remove_user_avatar(
+    app: AppHandle,
     state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
-) -> Result<bool, errors::CommandError> {
+) -> Result<(), errors::CommandError> {
     let response = state_ripple.delete_user_portrait().await?;
-    Ok(response.code == 200)
+    if response.code == 200 {
+        // Emit updated user profile
+        let profile_response = state_ripple.get_user_profile().await?;
+        let _ = app.emit("user-profile-updated", &profile_response.data);
+        Ok(())
+    } else {
+        Err(errors::CommandError::RippleAPIError(
+            "delete_user_portrait".to_string(),
+            response.code,
+            response.message,
+        ))
+    }
 }
 
 #[tauri::command]

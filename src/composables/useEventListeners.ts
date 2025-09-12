@@ -1,10 +1,12 @@
 import { onMounted, onUnmounted } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { NewMessageEvent, FriendUpdateEvent, MessagesReadEvent } from '../types/app-state';
+import type { NewMessageEvent, FriendUpdateEvent, MessagesReadEvent, UserProfileData } from '../types/app-state';
 import { useAppState } from './useAppState';
+import { useUserProfile } from './useUserProfile';
 
 export function useEventListeners() {
   const { updateConversationWithNewMessage, updateFriend, updateMessagesRead } = useAppState();
+  const { updateUserProfile } = useUserProfile();
   
   let unlistenFns: UnlistenFn[] = [];
 
@@ -31,11 +33,18 @@ export function useEventListeners() {
         updateMessagesRead(conversation_id, total_unread);
       });
 
+      // Listen for user profile updates
+      const unlistenUserProfile = await listen<UserProfileData>('user-profile-updated', (event) => {
+        console.log('Received user profile update:', event.payload);
+        updateUserProfile(event.payload);
+      });
+
       // Store unlisten functions
       unlistenFns = [
         unlistenNewMessage,
         unlistenFriendUpdate,
         unlistenMessagesRead,
+        unlistenUserProfile,
       ];
 
       console.log('Event listeners started');

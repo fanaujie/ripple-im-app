@@ -68,3 +68,9 @@ export interface UserProfileData {
     nickName: string;
     avatar?: string;
 }
+
+// User Profile Event Types
+export interface UserProfileUpdatedEvent {
+    profile: UserProfileData;
+    action: 'nickname_updated' | 'avatar_updated' | 'avatar_removed';
+}

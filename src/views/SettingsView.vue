@@ -214,10 +214,10 @@
 </template>
 
 <script setup lang="ts">
-import {ref, onMounted, nextTick} from 'vue';
+import {ref, computed, onMounted, nextTick} from 'vue';
 import {invoke, convertFileSrc} from '@tauri-apps/api/core';
 import {open} from '@tauri-apps/plugin-dialog';
-import type {UserProfileData} from '../types/app-state';
+import {useUserProfile} from '../composables/useUserProfile';
 import defaultAvatarUrl from '../assets/default-avatar.svg';
 
 // Define component name for KeepAlive
@@ -225,12 +225,16 @@ defineOptions({
   name: 'SettingsView'
 });
 
-// Refs
-const userProfile = ref<UserProfileData | null>(null);
-const userId = ref<number>(0); // Will be loaded from API
+// Use event-driven user profile
+const { userProfile, loadUserProfile } = useUserProfile();
+
+// Local UI state
 const nicknameInput = ref<string>('');
 const isUpdating = ref<boolean>(false);
 const isEditingNickname = ref<boolean>(false);
+
+// Computed properties
+const userId = computed(() => userProfile.value?.userId || 0);
 const selectedFile = ref<string | null>(null);
 const avatarPreview = ref<string>('');
 const showPreviewDialog = ref<boolean>(false);
@@ -250,23 +254,7 @@ const errorMessage = ref<string>('');
 //   return nicknameInput.value !== userProfile.value?.nickname || selectedFile.value !== null;
 // });
 
-// Methods
-const loadUserProfile = async () => {
-  try {
-    const profile = await invoke<UserProfileData | null>('get_user_profile');
-
-    userProfile.value = profile;
-    if (profile) {
-      nicknameInput.value = profile.nickName;
-      userId.value = profile.userId;
-    }
-
-  } catch (error) {
-    console.error('Failed to load user profile:', error);
-    showErrorDialog.value = true;
-    errorMessage.value = error instanceof Error ? error.message : String(error);
-  }
-};
+// Methods - Simplified without manual state management
 
 
 const startEditingNickname = () => {
@@ -284,18 +272,16 @@ const saveNickname = async () => {
 
   isUpdating.value = true;
   try {
-    const success = await invoke<boolean>('update_user_nickname', {
+    await invoke('update_user_nickname', {
       nickname: nicknameInput.value.trim()
     });
 
-    if (success) {
-      await loadUserProfile();
-      isEditingNickname.value = false;
-    } else {
-      console.error('Failed to update nickname');
-    }
+    isEditingNickname.value = false;
+    // UI will update automatically via event
   } catch (error) {
     console.error('Error updating nickname:', error);
+    showErrorDialog.value = true;
+    errorMessage.value = error instanceof Error ? error.message : 'Failed to update nickname';
   } finally {
     isUpdating.value = false;
   }
@@ -505,7 +491,7 @@ const saveAvatar = async () => {
     }
 
     // Call the API with complete file path
-    const imageUrl = await invoke<string>('update_user_avatar', {
+    await invoke('update_user_avatar', {
       uploadFilepath: filename,
       x,
       y,
@@ -513,16 +499,12 @@ const saveAvatar = async () => {
       height
     });
 
-    // Update user profile with new image URL
-    if (userProfile.value) {
-      userProfile.value.avatar = imageUrl;
-    }
-
+    // UI will update automatically via event
     closePreviewDialog();
   } catch (error) {
     console.error('Error updating avatar:', error);
     showErrorDialog.value = true;
-    errorMessage.value = error instanceof Error ? error.message : String(error);
+    errorMessage.value = error instanceof Error ? error.message : 'Failed to update avatar';
   } finally {
     isUpdating.value = false;
   }
@@ -533,16 +515,14 @@ const removeAvatar = async () => {
 
   isUpdating.value = true;
   try {
-    const success = await invoke<boolean>('remove_user_avatar');
+    await invoke('remove_user_avatar');
 
-    if (success) {
-      await loadUserProfile();
-      closePreviewDialog();
-    } else {
-      console.error('Failed to remove avatar');
-    }
+    closePreviewDialog();
+    // UI will update automatically via event
   } catch (error) {
     console.error('Error removing avatar:', error);
+    showErrorDialog.value = true;
+    errorMessage.value = error instanceof Error ? error.message : 'Failed to remove avatar';
   } finally {
     isUpdating.value = false;
   }
@@ -585,7 +565,7 @@ const onImageError = (event: Event) => {
   }
 };
 
-// Lifecycle
+// Initialize user profile on mount
 onMounted(() => {
   loadUserProfile();
 });

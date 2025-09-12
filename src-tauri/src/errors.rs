@@ -14,6 +14,8 @@ pub enum CommandError {
     Base64DecodeError(#[from] base64::DecodeError),
     #[error(transparent)]
     AnyhowError(#[from] anyhow::Error),
+    #[error("Ripple API error: API `{0}`, status code {1}, message: {2}")]
+    RippleAPIError(String, i64, String),
 }
 
 impl serde::Serialize for CommandError {
