@@ -16,6 +16,9 @@ dist-ssr
 src-tauri/target/
 src-tauri/gen/
 
+# ripple-proto build outputs
+ripple-proto/target/
+
 # Editor directories and files
 .vscode
 !.vscode/extensions.json

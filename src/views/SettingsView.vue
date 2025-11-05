@@ -214,10 +214,10 @@
 </template>
 
 <script setup lang="ts">
-import {ref, computed, onMounted, nextTick} from 'vue';
+import {ref, computed, nextTick} from 'vue';
 import {invoke, convertFileSrc} from '@tauri-apps/api/core';
 import {open} from '@tauri-apps/plugin-dialog';
-import {useUserProfile} from '../composables/useUserProfile';
+import { useUserProfileDisplay } from '../composables/useUserProfileDisplay';
 import defaultAvatarUrl from '../assets/default-avatar.svg';
 
 // Define component name for KeepAlive
@@ -225,8 +225,8 @@ defineOptions({
   name: 'SettingsView'
 });
 
-// Use event-driven user profile
-const { userProfile, loadUserProfile } = useUserProfile();
+// Use composables
+const { userProfile, loading: profileLoading, error: profileError } = useUserProfileDisplay();
 
 // Local UI state
 const nicknameInput = ref<string>('');
@@ -234,7 +234,7 @@ const isUpdating = ref<boolean>(false);
 const isEditingNickname = ref<boolean>(false);
 
 // Computed properties
-const userId = computed(() => userProfile.value?.userId || 0);
+const userId = computed(() => userProfile.value?.userId || 'Unknown');
 const selectedFile = ref<string | null>(null);
 const avatarPreview = ref<string>('');
 const showPreviewDialog = ref<boolean>(false);
@@ -565,8 +565,5 @@ const onImageError = (event: Event) => {
   }
 };
 
-// Initialize user profile on mount
-onMounted(() => {
-  loadUserProfile();
-});
+// No lifecycle needed - useUserProfileDisplay handles everything automatically
 </script>

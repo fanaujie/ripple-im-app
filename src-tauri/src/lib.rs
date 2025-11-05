@@ -4,24 +4,30 @@ mod db;
 mod errors;
 mod file_utils;
 mod image_processor;
-mod ripple;
+mod ripple_ws;
 mod server;
 
+mod ripple_api;
+mod ripple_syncer;
 mod store_engine;
-mod store_engine_sqlite;
-use crate::ripple::RippleApi;
-use crate::store_engine::{MemoryStore, StoreEngine};
+
+use crate::ripple_api::RippleApi;
+use crate::ripple_syncer::DataSyncManager;
+use crate::ripple_syncer::DefaultEventEmitter;
+use crate::ripple_syncer::IncrementalSyncManager;
+use crate::ripple_ws::RippleWsManager;
+use crate::ripple_ws::SyncAwareWsMessageHandler;
 use app_config::AppConfig;
-use db::DB;
 use oauth2::reqwest;
-use ripple::oauth_client::OauthClient;
+use ripple_api::oauth_client::OauthClient;
 use server::Server;
 use std::fs;
 use std::path::PathBuf;
+use store_engine::store_engine::MemoryStore;
 use tauri::path::BaseDirectory;
-use tauri::{async_runtime, Manager};
+use tauri::Manager;
 
-#[cfg(feature = "memory-store")]
+// #[cfg(feature = "memory-store")]
 type DefaultStoreEngine = MemoryStore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -51,13 +57,22 @@ pub fn run() {
                 .build()?;
             let oauth_client = OauthClient::new(&app_config, reqwest_client.clone())?;
             let store = create_store();
-            app.manage(RippleApi::new(
+            let ripple_api = RippleApi::new(
                 app_config.upload_gateway_url.clone(),
                 app_config.api_gateway_url.clone(),
                 reqwest_client,
                 oauth_client,
                 store.clone(),
-            ));
+            );
+            let data_sync = DataSyncManager::new(ripple_api.clone(), store.clone());
+            let emitter = DefaultEventEmitter::new(app.handle().clone());
+            let syncer = IncrementalSyncManager::new(data_sync.clone(), emitter);
+            let sync_aware_msg_handler = SyncAwareWsMessageHandler::new(syncer);
+            let ws_manager = RippleWsManager::new(sync_aware_msg_handler.clone());
+            app.manage(ripple_api);
+            app.manage(data_sync);
+            app.manage(sync_aware_msg_handler);
+            app.manage(ws_manager);
             app.manage(store);
             app.manage(app_config); // read-only, no mutex needed
             app.manage(tokio::sync::Mutex::new(Server::new()));
@@ -71,17 +86,18 @@ pub fn run() {
             commands::stop_server,
             commands::open_signup_url,
             commands::open_auth_url,
+            commands::init_global_data,
             commands::get_user_profile,
+            commands::get_user_profile_by_id,
             commands::update_user_avatar,
             commands::update_user_nickname,
             commands::remove_user_avatar,
-            commands::send_friend_request,
-            commands::handle_friend_request,
-            commands::get_friend_requests,
-            commands::get_sent_requests,
-            commands::get_friends_list,
+            commands::add_friend,
             commands::remove_friend,
-            commands::search_friends,
+            commands::update_friend_display_name,
+            commands::block_user,
+            commands::unblock_user,
+            commands::hide_blocked_user,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -95,7 +111,7 @@ fn parse_app_config(resource_path: PathBuf) -> AppConfig {
     app_config
 }
 
-#[cfg(feature = "memory-store")]
+// #[cfg(feature = "memory-store")]
 fn create_store() -> DefaultStoreEngine {
     MemoryStore::new()
 }

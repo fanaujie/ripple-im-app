@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package ripple.wsmessage;
+
+
+message SelfInfoUpdateEvent {
+  int64 user_id = 1;
+}
+
+
+message RelationEvent {
+  enum EventType {
+    ADD_FRIEND = 0;
+    REMOVE_FRIEND = 1;
+    UPDATE_FRIEND = 2;
+    BLOCK_USER = 3;
+    UNBLOCK_USER = 4;
+    HIDE_BLOCKED_USER = 5;
+  }
+  EventType event_type = 1;
+  int64 user_id = 2;
+  int64 target_user_id = 3;
+}
+
+message SendEventReq {
+  oneof event {
+    SelfInfoUpdateEvent self_info_update_event = 1;
+    RelationEvent relation_event = 2;
+  }
+}
+
+enum PushMessageType {
+  PUSH_MESSAGE_TYPE_UNSPECIFIED = 0;
+  PUSH_MESSAGE_TYPE_SELF_INFO_UPDATE = 1;
+  PUSH_MESSAGE_TYPE_RELATION_INFO_UPDATE = 2;
+}
+
+message PushMessageRequest {
+  PushMessageType push_message_type = 1;
+  string send_user_id = 2;
+  string receive_user_id = 3;
+  string request_device_id = 4;
+  bytes content = 5;
+}
+
+message WsMessage {
+  oneof message_type {
+    HeartbeatRequest heartbeat_request = 1;
+    HeartbeatResponse heartbeat_response = 2;
+    PushMessageRequest push_message_request = 3;
+  }
+}
+
+message HeartbeatRequest {
+  string user_id = 1;
+  int64  timestamp = 2;
+}
+
+message HeartbeatResponse {
+  string user_id = 1;
+  int64  client_timestamp = 2;
+  int64  server_timestamp = 3;
+}

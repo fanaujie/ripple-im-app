@@ -1,0 +1,10 @@
+[package]
+name = "ripple-proto"
+version = "0.1.0"
+edition = "2024"
+
+[build-dependencies]
+prost-build = "0.14.1"
+
+[dependencies]
+prost = "0.14"

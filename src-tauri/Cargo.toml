@@ -45,4 +45,10 @@ reqwest = { version = "0.12.22", features = ["multipart", "json"] }
 sha2 = "0.10"
 base16ct = { version = "0.2.0", features = ["alloc"] }
 mime = "0.3.17"
-bytes = "1.10.1"
+tokio-tungstenite = "*"
+futures-util = "0.3"
+trait-variant = "0.1.2"
+prost = "0.14"
+ripple-proto = { path = "../ripple-proto" }
+backoff = { version = "0.4.0", features = ["tokio"] }
+futures-channel = "0.3.31"

@@ -1,14 +1,14 @@
 use crate::app_config::AppConfig;
-use std::path::Path;
-
 use crate::file_utils::FileUtils;
 use crate::image_processor::ImageProcessor;
-use crate::ripple::api_response::UserProfileData;
-use crate::ripple::RippleApi;
+use crate::ripple_api::api_response::{GlobalInitData, UserProfileData};
+use crate::ripple_api::RippleApi;
+use crate::ripple_syncer::DataSyncManager;
 use crate::server::Server;
 use crate::store_engine::StoreEngine;
 use crate::{errors, DefaultStoreEngine};
-use tauri::{AppHandle, Emitter, Manager, State};
+use std::path::Path;
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
@@ -56,19 +56,42 @@ pub fn open_auth_url(app: AppHandle) -> Result<(), errors::CommandError> {
 }
 
 #[tauri::command]
-pub async fn get_user_profile(
-    state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
-) -> Result<UserProfileData, errors::CommandError> {
-    let response = state_ripple.get_user_profile().await?;
-    if response.code == 200 {
-        Ok(response.data)
-    } else {
-        Err(errors::CommandError::RippleAPIError(
-            "get_user_profile".to_string(),
-            response.code,
-            response.message,
-        ))
+pub async fn init_global_data(
+    data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
+) -> Result<GlobalInitData, errors::CommandError> {
+    let cached_profile = data_sync.get_cached_profile().await.ok().flatten();
+    let (cached_friends, cached_blocked) = data_sync.get_cached_relations().await?;
+    if let Some(profile) = cached_profile {
+        if !cached_friends.is_empty() || !cached_blocked.is_empty() {
+            return Ok(GlobalInitData {
+                user_profile: profile,
+                friends: cached_friends,
+                blocked_users: cached_blocked,
+            });
+        }
     }
+
+    let profile = data_sync.sync_user_profile().await?;
+    data_sync.sync_all_relations().await?;
+    let (cached_friends, cached_blocked) = data_sync.get_cached_relations().await?;
+    Ok(GlobalInitData {
+        user_profile: profile,
+        friends: cached_friends,
+        blocked_users: cached_blocked,
+    })
+}
+
+#[tauri::command]
+pub async fn get_user_profile(
+    data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
+) -> Result<UserProfileData, errors::CommandError> {
+    data_sync.get_cached_profile().await?.ok_or_else(|| {
+        errors::CommandError::RippleAPIError(
+            "get_user_profile".to_string(),
+            500,
+            "User profile not initialized. Please call init_global_data first.".to_string(),
+        )
+    })
 }
 
 #[tauri::command]
@@ -94,55 +117,42 @@ pub async fn update_user_avatar(
     let res = ripple
         .upload_avatar(filename.to_string(), crop_img.0, crop_img.1)
         .await?;
-    if res.code == 200 {
-        // Emit updated user profile
-        let profile_response = ripple.get_user_profile().await?;
-        let _ = app.emit("user-profile-updated", &profile_response.data);
-        Ok(())
-    } else {
-        Err(errors::CommandError::RippleAPIError(
+    if res.code != 200 {
+        return Err(errors::CommandError::RippleAPIError(
             "upload_avatar".to_string(),
             res.code,
             res.message,
-        ))
+        ));
     }
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn update_user_nickname(
-    app: AppHandle,
     nickname: String,
     state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<(), errors::CommandError> {
     let response = state_ripple.update_nickname(nickname).await?;
-    if response.code == 200 {
-        // Emit updated user profile
-        let profile_response = state_ripple.get_user_profile().await?;
-        let _ = app.emit("user-profile-updated", &profile_response.data);
-        Ok(())
-    } else {
-        Err(errors::CommandError::RippleAPIError(
+    if response.code != 200 {
+        return Err(errors::CommandError::RippleAPIError(
             "update_nickname".to_string(),
             response.code,
             response.message,
-        ))
+        ));
     }
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn remove_user_avatar(
-    app: AppHandle,
     state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<(), errors::CommandError> {
-    let response = state_ripple.delete_user_portrait().await?;
+    let response = state_ripple.delete_user_avatar().await?;
     if response.code == 200 {
-        // Emit updated user profile
-        let profile_response = state_ripple.get_user_profile().await?;
-        let _ = app.emit("user-profile-updated", &profile_response.data);
         Ok(())
     } else {
         Err(errors::CommandError::RippleAPIError(
-            "delete_user_portrait".to_string(),
+            "delete_user_avatar".to_string(),
             response.code,
             response.message,
         ))
@@ -150,149 +160,127 @@ pub async fn remove_user_avatar(
 }
 
 #[tauri::command]
-pub async fn send_friend_request(
-    account: String,
-    _state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
-) -> Result<bool, errors::CommandError> {
-    // Mock implementation - always return success
-    println!("Mock: Send friend request to {}", account);
-    Ok(true)
-}
-
-#[tauri::command]
-pub async fn handle_friend_request(
-    request_id: String,
-    accept: bool,
-    _state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
-) -> Result<bool, errors::CommandError> {
-    // Mock implementation - always return success
-    println!(
-        "Mock: Handle friend request {} - accept: {}",
-        request_id, accept
-    );
-    Ok(true)
-}
-
-#[tauri::command]
-pub async fn get_friend_requests(
-    _state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
-) -> Result<serde_json::Value, errors::CommandError> {
-    // Mock friend requests data
-    let mock_requests = serde_json::json!([
-        {
-            "id": "req1",
-            "fromAccount": "dave@example.com",
-            "toAccount": "me@example.com",
-            "fromNickName": "Dave",
-            "fromAvatar": "https://via.placeholder.com/64",
-            "status": "pending",
-            "createdAt": "2024-01-15T10:30:00Z"
-        },
-        {
-            "id": "req2",
-            "fromAccount": "eve@example.com",
-            "toAccount": "me@example.com",
-            "fromNickName": "Eve",
-            "fromAvatar": null,
-            "status": "pending",
-            "createdAt": "2024-01-14T15:20:00Z"
-        }
-    ]);
-    Ok(mock_requests)
-}
-
-#[tauri::command]
-pub async fn get_sent_requests(
-    _state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
-) -> Result<serde_json::Value, errors::CommandError> {
-    // Mock sent requests data
-    let mock_sent_requests = serde_json::json!([
-        {
-            "id": "sent1",
-            "fromAccount": "me@example.com",
-            "toAccount": "frank@example.com",
-            "fromNickName": "Me",
-            "fromAvatar": "https://via.placeholder.com/64",
-            "status": "pending",
-            "createdAt": "2024-01-16T09:00:00Z"
-        }
-    ]);
-    Ok(mock_sent_requests)
-}
-
-#[tauri::command]
-pub async fn get_friends_list(
-    _state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
-) -> Result<serde_json::Value, errors::CommandError> {
-    // Mock friends list data
-    let mock_friends = serde_json::json!([
-        {
-            "account": "alice@example.com",
-            "nickName": "Alice",
-            "avatar": "https://via.placeholder.com/64"
-        },
-        {
-            "account": "bob@example.com",
-            "nickName": "Bob",
-            "avatar": null
-        },
-        {
-            "account": "charlie@example.com",
-            "nickName": "Charlie",
-            "avatar": "https://via.placeholder.com/64"
-        }
-    ]);
-    Ok(mock_friends)
+pub async fn add_friend(
+    app: AppHandle,
+    target_user_id: String,
+    state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
+) -> Result<(), errors::CommandError> {
+    let response = state_ripple.add_friend(target_user_id).await?;
+    if response.code == 200 {
+        Ok(())
+    } else {
+        Err(errors::CommandError::RippleAPIError(
+            "add_friend".to_string(),
+            response.code,
+            response.message,
+        ))
+    }
 }
 
 #[tauri::command]
 pub async fn remove_friend(
-    friend_account: String,
-    _state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
-) -> Result<bool, errors::CommandError> {
-    // Mock implementation - always return success
-    println!("Mock: Remove friend {}", friend_account);
-    Ok(true)
+    app: AppHandle,
+    friend_id: String,
+    state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
+) -> Result<(), errors::CommandError> {
+    let response = state_ripple.remove_friend(friend_id).await?;
+    if response.code == 200 {
+        Ok(())
+    } else {
+        Err(errors::CommandError::RippleAPIError(
+            "remove_friend".to_string(),
+            response.code,
+            response.message,
+        ))
+    }
 }
 
 #[tauri::command]
-pub async fn search_friends(
-    keyword: String,
-    _state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
-) -> Result<serde_json::Value, errors::CommandError> {
-    // Mock search implementation - filter friends by keyword
-    let all_friends = serde_json::json!([
-        {
-            "account": "alice@example.com",
-            "nickName": "Alice",
-            "avatar": "https://via.placeholder.com/64"
-        },
-        {
-            "account": "bob@example.com",
-            "nickName": "Bob",
-            "avatar": null
-        },
-        {
-            "account": "charlie@example.com",
-            "nickName": "Charlie",
-            "avatar": "https://via.placeholder.com/64"
-        }
-    ]);
+pub async fn update_friend_display_name(
+    app: AppHandle,
+    friend_id: String,
+    remark_name: String,
+    state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
+) -> Result<(), errors::CommandError> {
+    let response = state_ripple
+        .update_friend_remark_name(friend_id, remark_name.clone())
+        .await?;
+    if response.code != 200 {
+        return Err(errors::CommandError::RippleAPIError(
+            "update_friend_display_name".to_string(),
+            response.code,
+            response.message,
+        ));
+    }
+    Ok(())
+}
 
-    // Simple filtering based on keyword
-    let filtered_friends: Vec<serde_json::Value> = all_friends
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|friend| {
-            friend["nickName"]
-                .as_str()
-                .unwrap()
-                .to_lowercase()
-                .contains(&keyword.to_lowercase())
-        })
-        .cloned()
-        .collect();
+#[tauri::command]
+pub async fn block_user(
+    app: AppHandle,
+    target_user_id: String,
+    display_name: Option<String>,
+    state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
+) -> Result<(), errors::CommandError> {
+    let response = state_ripple.block_user(target_user_id).await?;
+    if response.code != 200 {
+        return Err(errors::CommandError::RippleAPIError(
+            "block_user".to_string(),
+            response.code,
+            response.message,
+        ));
+    }
+    Ok(())
+}
 
-    Ok(serde_json::json!(filtered_friends))
+#[tauri::command]
+pub async fn unblock_user(
+    app: AppHandle,
+    target_user_id: String,
+    state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
+) -> Result<(), errors::CommandError> {
+    let response = state_ripple.unblock_user(target_user_id).await?;
+    if response.code != 200 {
+        return Err(errors::CommandError::RippleAPIError(
+            "unblock_user".to_string(),
+            response.code,
+            response.message,
+        ));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn hide_blocked_user(
+    target_user_id: String,
+    state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
+) -> Result<(), errors::CommandError> {
+    let response = state_ripple.hide_blocked_user(target_user_id).await?;
+    if response.code != 200 {
+        return Err(errors::CommandError::RippleAPIError(
+            "hide_blocked_user".to_string(),
+            response.code,
+            response.message,
+        ));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_user_profile_by_id(
+    user_id: String,
+    state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
+) -> Result<UserProfileData, errors::CommandError> {
+    let response = state_ripple
+        .get_user_profile_by_id(user_id.parse().unwrap())
+        .await?;
+    if response.code == 200 {
+        Ok(response.data)
+    } else {
+        Err(errors::CommandError::RippleAPIError(
+            "get_user_profile_by_id".to_string(),
+            response.code,
+            response.message,
+        ))
+    }
 }

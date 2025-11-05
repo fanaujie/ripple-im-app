@@ -4,7 +4,7 @@ use oauth2::basic::{
     BasicClient, BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
     BasicTokenResponse,
 };
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use oauth2::{
     reqwest, AuthType, AuthUrl, Client, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
@@ -12,6 +12,7 @@ use oauth2::{
     StandardRevocableToken, TokenUrl,
 };
 
+#[derive(Clone)]
 pub struct OauthClient {
     client: Client<
         BasicErrorResponse,
@@ -26,8 +27,8 @@ pub struct OauthClient {
         EndpointSet,
     >,
     reqwest_client: reqwest::Client,
-    state: RwLock<Option<CsrfToken>>,
-    pkce_verifier: RwLock<Option<String>>,
+    state: Arc<RwLock<Option<CsrfToken>>>,
+    pkce_verifier: Arc<RwLock<Option<String>>>,
 }
 
 impl OauthClient {
@@ -41,8 +42,8 @@ impl OauthClient {
         Ok(OauthClient {
             client,
             reqwest_client,
-            state: RwLock::new(None),
-            pkce_verifier: RwLock::new(None),
+            state: Arc::new(RwLock::new(None)),
+            pkce_verifier: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -57,14 +58,11 @@ impl OauthClient {
             // Set the PKCE code challenge.
             .set_pkce_challenge(pkce_challenge)
             .url();
-        {
-            let mut state = self.state.write().unwrap();
-            *state = Some(csrf_token);
-        }
-        {
-            let mut pk = self.pkce_verifier.write().unwrap();
-            *pk = Some(pkce_verifier.secret().to_string());
-        }
+        self.state.write().unwrap().replace(csrf_token);
+        self.pkce_verifier
+            .write()
+            .unwrap()
+            .replace(pkce_verifier.secret().to_string());
         auth_url.into()
     }
 

@@ -1,5 +1,11 @@
-use crate::ripple::RippleApi;
-use crate::store_engine::{MemoryStore, StoreEngine};
+use crate::app_config::AppConfig;
+use crate::ripple_api::RippleApi;
+use crate::ripple_syncer::default_event_emitter::DefaultEventEmitter;
+use crate::ripple_syncer::incremental_sync_manager::IncrementalSyncManager;
+use crate::ripple_ws::ripple_ws_manager::RippleWsManager;
+use crate::ripple_ws::sync_aware_ws_message_handler::SyncAwareWsMessageHandler;
+use crate::ripple_ws::syncer_control::SyncerControl;
+use crate::store_engine::store_engine::StoreEngine;
 use crate::DefaultStoreEngine;
 use axum::extract::{Query, State};
 use axum::response::Html;
@@ -10,7 +16,12 @@ use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::net::ToSocketAddrs;
 use tokio::task::JoinHandle;
+use uuid::Uuid;
 
+type SyncerAwareMsgHandlerType =
+    SyncAwareWsMessageHandler<IncrementalSyncManager<DefaultStoreEngine, DefaultEventEmitter>>;
+
+type WsManagerType = RippleWsManager<SyncerAwareMsgHandlerType>;
 async fn load_html_file(app: &AppHandle, filename: &str) -> String {
     let path = format!("resources/{}", filename);
     let resource_path = match app.path().resolve(path, BaseDirectory::Resource) {
@@ -136,6 +147,27 @@ async fn handler(
                     load_html_file(&api_state.app_handle, "auth-success-restart.html").await,
                 );
             }
+            let app_handle = api_state.app_handle.clone();
+            tauri::async_runtime::spawn(async move {
+                let store = app_handle.state::<DefaultStoreEngine>();
+                let ws_manager = app_handle.state::<WsManagerType>();
+                let syncer = app_handle.state::<SyncerAwareMsgHandlerType>();
+                syncer.start_syncer().await.unwrap();
+                let config = app_handle.state::<AppConfig>();
+                let uuid = store.get_device_id().await.unwrap();
+                let device_id = if let Some(id) = uuid {
+                    id
+                } else {
+                    let new_id = Uuid::new_v4();
+                    store.save_device_id(&new_id).await.unwrap();
+                    new_id
+                };
+                let token = store.get_token().await.unwrap();
+                ws_manager
+                    .start(&config.ws_gateway_url, &token.access_token, device_id)
+                    .await
+                    .unwrap();
+            });
             Html(load_html_file(&api_state.app_handle, "auth-success.html").await)
         }
         Err(e) => {

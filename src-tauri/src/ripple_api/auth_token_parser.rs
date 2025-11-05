@@ -29,6 +29,12 @@ pub struct Claims {
     scope: Vec<String>, // Optional. Scopes granted by the token
 }
 
+impl Claims {
+    pub fn get_sub(&self) -> String {
+        self.sub.clone()
+    }
+}
+
 pub struct AuthTokenParser();
 
 impl AuthTokenParser {
@@ -37,7 +43,6 @@ impl AuthTokenParser {
         if parts.len() != 3 {
             return Err(anyhow!("Failed to split the JWT into parts"));
         }
-        println!("Decoding JWT payload: {}", parts[1]);
         let payload = STANDARD_NO_PAD.decode(parts[1])?;
         let claims: Claims = serde_json::from_slice(&payload)?;
         Ok(claims)
