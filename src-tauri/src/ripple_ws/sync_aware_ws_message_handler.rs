@@ -1,4 +1,4 @@
-use crate::ripple_syncer::sync_handler::{RippleSyncHandler, SyncHandler};
+use crate::ripple_syncer::sync_handler::RippleSyncHandler;
 use crate::ripple_ws::syncer_control::SyncerControl;
 use crate::ripple_ws::ws_message_handler::RippleWsMsgHandler;
 use futures_channel::mpsc::UnboundedSender;
@@ -6,7 +6,6 @@ use futures_util::StreamExt;
 use prost::Message as ProstMessage;
 use ripple_proto::ripple_pb;
 use ripple_proto::ripple_pb::ws_message::MessageType;
-use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::watch::Sender;
 use tokio::sync::{watch, Mutex};
@@ -15,6 +14,7 @@ use tokio_tungstenite::tungstenite::Message;
 struct SyncAwareWsMessageHandlerInner {
     self_update_sender: Option<UnboundedSender<ripple_pb::PushMessageRequest>>,
     relation_update_sender: Option<UnboundedSender<ripple_pb::PushMessageRequest>>,
+    message_update_sender: Option<UnboundedSender<ripple_pb::PushMessageRequest>>,
     watch_tx: Option<Sender<bool>>,
 }
 
@@ -36,6 +36,7 @@ where
             inner: Arc::new(Mutex::new(SyncAwareWsMessageHandlerInner {
                 self_update_sender: None,
                 relation_update_sender: None,
+                message_update_sender: None,
                 watch_tx: None,
             })),
             syncer,
@@ -83,6 +84,27 @@ where
             }
         });
     }
+
+    fn spawn_message_update_handler(
+        syncer: S,
+        mut receiver: futures_channel::mpsc::UnboundedReceiver<ripple_pb::PushMessageRequest>,
+        mut watch_rx: watch::Receiver<bool>,
+    ) {
+        tauri::async_runtime::spawn(async move {
+            loop {
+                tokio::select! {
+                    Some(push_req) = receiver.next() => {
+                        syncer.handle_message_update_sync(push_req).await;
+                    }
+                    _ = watch_rx.changed() => {
+                        if *watch_rx.borrow() == true {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+    }
 }
 
 impl<S> SyncerControl for SyncAwareWsMessageHandler<S>
@@ -95,11 +117,14 @@ where
             futures_channel::mpsc::unbounded::<ripple_pb::PushMessageRequest>();
         let (relation_update_sender, relation_update_receiver) =
             futures_channel::mpsc::unbounded::<ripple_pb::PushMessageRequest>();
+        let (message_update_sender, message_update_receiver) =
+            futures_channel::mpsc::unbounded::<ripple_pb::PushMessageRequest>();
 
         let mut inner = self.inner.lock().await;
         inner.watch_tx.replace(watch_tx);
         inner.self_update_sender.replace(self_update_sender);
         inner.relation_update_sender.replace(relation_update_sender);
+        inner.message_update_sender.replace(message_update_sender);
         drop(inner);
         // Spawn handlers
         Self::spawn_self_update_handler(
@@ -110,6 +135,11 @@ where
         Self::spawn_relation_update_handler(
             self.syncer.clone(),
             relation_update_receiver,
+            watch_rx.clone(),
+        );
+        Self::spawn_message_update_handler(
+            self.syncer.clone(),
+            message_update_receiver,
             watch_rx,
         );
         Ok(())
@@ -147,6 +177,13 @@ where
                             Ok(ripple_pb::PushMessageType::RelationInfoUpdate) => {
                                 if let Some(sender) =
                                     &self.inner.lock().await.relation_update_sender
+                                {
+                                    let _ = sender.unbounded_send(push_message);
+                                }
+                            }
+                            Ok(ripple_pb::PushMessageType::SingleMessage) => {
+                                if let Some(sender) =
+                                    &self.inner.lock().await.message_update_sender
                                 {
                                     let _ = sender.unbounded_send(push_message);
                                 }

@@ -3,7 +3,7 @@
     <!-- Logo/Header -->
     <div class="h-header flex items-center justify-between px-6 border-b border-border-sidebar">
       <div class="flex items-center">
-        <h1 class="text-xl font-semibold text-text-sidebar">ripple</h1>
+        <h1 class="text-xl font-semibold text-text-sidebar">Ripple</h1>
       </div>
     </div>
 

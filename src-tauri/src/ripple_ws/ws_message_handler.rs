@@ -1,5 +1,5 @@
 use futures_channel::mpsc::UnboundedSender;
-use tokio_tungstenite::tungstenite::{Error, Message};
+use tokio_tungstenite::tungstenite::Message;
 
 #[trait_variant::make(RippleWsMsgHandler: Send)]
 pub trait WsMessageHandler: Sync + Clone + 'static {

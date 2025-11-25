@@ -4,23 +4,39 @@ package ripple.wsmessage;
 
 
 message SelfInfoUpdateEvent {
-  int64 user_id = 1;
+  enum EventType {
+    UNSPECIFIED = 0;
+    UPDATE_NICK_NAME = 1;
+    UPDATE_AVATAR = 2;
+    DELETE_AVATAR = 3;
+  }
+  EventType event_type = 1;
+  int64 user_id = 2;
+  string nickName = 3;
+  string avatar = 4;
 }
 
 
 message RelationEvent {
   enum EventType {
-    ADD_FRIEND = 0;
-    REMOVE_FRIEND = 1;
-    UPDATE_FRIEND = 2;
-    BLOCK_USER = 3;
-    UNBLOCK_USER = 4;
-    HIDE_BLOCKED_USER = 5;
+    UNSPECIFIED = 0;
+    ADD_FRIEND = 1;
+    REMOVE_FRIEND = 2;
+    UPDATE_FRIEND_REMARK_NAME = 3;
+    BLOCK_STRANGER = 4;
+    BLOCK_FRIEND = 5;
+    UNBLOCK_USER = 6;
+    HIDE_BLOCKED_USER = 7;
+    UPDATE_FRIEND_INFO = 8;
   }
   EventType event_type = 1;
   int64 user_id = 2;
   int64 target_user_id = 3;
+  string target_user_nick_name = 4;
+  string target_user_avatar = 5;
+  string target_user_remark_name = 6;
 }
+
 
 message SendEventReq {
   oneof event {
@@ -29,10 +45,29 @@ message SendEventReq {
   }
 }
 
+message SingleMessageContent {
+  string text = 2;
+  string file_url = 3;
+  string file_name = 4;
+}
+
+message SendMessageReq {
+  int64 sender_id = 1;
+  string conversation_id = 2;
+  int64 receiver_id = 3;
+  int64 group_id = 4;
+  int64 message_id = 5;
+  int64 send_timestamp = 6;
+  oneof message {
+    SingleMessageContent single_message_content = 7;
+  };
+}
+
 enum PushMessageType {
   PUSH_MESSAGE_TYPE_UNSPECIFIED = 0;
   PUSH_MESSAGE_TYPE_SELF_INFO_UPDATE = 1;
   PUSH_MESSAGE_TYPE_RELATION_INFO_UPDATE = 2;
+  PUSH_MESSAGE_TYPE_SINGLE_MESSAGE = 3;
 }
 
 message PushMessageRequest {
@@ -40,7 +75,10 @@ message PushMessageRequest {
   string send_user_id = 2;
   string receive_user_id = 3;
   string request_device_id = 4;
-  bytes content = 5;
+  oneof payload {
+    SendEventReq event_data = 5;
+    SendMessageReq message_data = 6;
+  }
 }
 
 message WsMessage {

@@ -1,21 +1,25 @@
 use crate::app_config::AppConfig;
 use crate::file_utils::FileUtils;
 use crate::image_processor::ImageProcessor;
-use crate::ripple_api::api_response::{GlobalInitData, UserProfileData};
+use crate::ripple_api::api_response::{
+    ReadMessagesData, RelationUser, SendMessageRequest, UserProfileData,
+};
 use crate::ripple_api::RippleApi;
+use crate::ripple_syncer::event_emitter::UIConversationItem;
 use crate::ripple_syncer::DataSyncManager;
 use crate::server::Server;
-use crate::store_engine::StoreEngine;
 use crate::{errors, DefaultStoreEngine};
+use anyhow::anyhow;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
 pub async fn exists_token(
-    state_ripple: State<'_, DefaultStoreEngine>,
+    data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
 ) -> Result<bool, errors::CommandError> {
-    Ok(state_ripple.exists_token().await?)
+    Ok(data_sync.exists_token().await?)
 }
 
 #[tauri::command]
@@ -56,40 +60,34 @@ pub fn open_auth_url(app: AppHandle) -> Result<(), errors::CommandError> {
 }
 
 #[tauri::command]
-pub async fn init_global_data(
+pub async fn preload_global_data(
     data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
-) -> Result<GlobalInitData, errors::CommandError> {
-    let cached_profile = data_sync.get_cached_profile().await.ok().flatten();
-    let (cached_friends, cached_blocked) = data_sync.get_cached_relations().await?;
-    if let Some(profile) = cached_profile {
-        if !cached_friends.is_empty() || !cached_blocked.is_empty() {
-            return Ok(GlobalInitData {
-                user_profile: profile,
-                friends: cached_friends,
-                blocked_users: cached_blocked,
-            });
-        }
+) -> Result<(), errors::CommandError> {
+    if !data_sync.exists_profile().await? {
+        data_sync.sync_user_profile().await?;
+    }
+    if !data_sync.exist_relations().await? {
+        data_sync.sync_all_relations().await?;
+    }
+    if !data_sync.exist_conversations().await? {
+        data_sync.sync_all_conversations().await?;
     }
 
-    let profile = data_sync.sync_user_profile().await?;
-    data_sync.sync_all_relations().await?;
-    let (cached_friends, cached_blocked) = data_sync.get_cached_relations().await?;
-    Ok(GlobalInitData {
-        user_profile: profile,
-        friends: cached_friends,
-        blocked_users: cached_blocked,
-    })
+    // With the new unread_count refactor, we no longer need to preload messages
+    // to calculate accurate unread counts. The counts are now maintained incrementally.
+
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn get_user_profile(
     data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
 ) -> Result<UserProfileData, errors::CommandError> {
-    data_sync.get_cached_profile().await?.ok_or_else(|| {
+    data_sync.get_profile().await?.ok_or_else(|| {
         errors::CommandError::RippleAPIError(
             "get_user_profile".to_string(),
             500,
-            "User profile not initialized. Please call init_global_data first.".to_string(),
+            "User profile not initialized. Please call preload_global_data first.".to_string(),
         )
     })
 }
@@ -279,6 +277,171 @@ pub async fn get_user_profile_by_id(
     } else {
         Err(errors::CommandError::RippleAPIError(
             "get_user_profile_by_id".to_string(),
+            response.code,
+            response.message,
+        ))
+    }
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
+pub struct UIRelationData {
+    pub friends: Vec<RelationUser>,
+    pub blocked_users: Vec<RelationUser>,
+}
+
+#[tauri::command]
+pub async fn get_relations(
+    sync_manager: State<'_, DataSyncManager<DefaultStoreEngine>>,
+) -> Result<UIRelationData, errors::CommandError> {
+    let (cached_friends, cached_blocked) = sync_manager.get_relations().await?;
+    Ok(UIRelationData {
+        friends: cached_friends,
+        blocked_users: cached_blocked,
+    })
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct UIConversations {
+    pub conversation: Vec<UIConversationItem>,
+}
+#[tauri::command]
+pub async fn get_conversations(
+    sync_manager: State<'_, DataSyncManager<DefaultStoreEngine>>,
+) -> Result<UIConversations, errors::CommandError> {
+    let mut conversations = Vec::<UIConversationItem>::new();
+    let cached_conversations = sync_manager.get_conversations().await?;
+
+    match sync_manager.get_profile().await? {
+        Some(_profile) => {
+            for conversation in cached_conversations {
+                let ui_conversation: UIConversationItem = conversation.into();
+
+                // unread_count is now properly maintained in storage
+                // No need to recalculate here
+
+                conversations.push(ui_conversation);
+            }
+            Ok(UIConversations {
+                conversation: conversations,
+            })
+        }
+        None => Err(errors::CommandError::AnyhowError(anyhow!(
+            "User profile not found"
+        ))),
+    }
+}
+
+#[tauri::command]
+pub async fn send_message(
+    sender_id: String,
+    conversation_id: String,
+    receiver_id: String,
+    text_content: Option<String>,
+    file_url: Option<String>,
+    file_name: Option<String>,
+    state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
+) -> Result<String, errors::CommandError> {
+    let request = SendMessageRequest {
+        sender_id,
+        conversation_id,
+        receiver_id,
+        text_content,
+        file_url,
+        file_name,
+    };
+
+    let response = state_ripple.send_message(request).await?;
+
+    if response.code == 200 {
+        if let Some(data) = response.data {
+            Ok(data.message_id)
+        } else {
+            Err(errors::CommandError::RippleAPIError(
+                "send_message".to_string(),
+                500,
+                "No message ID returned".to_string(),
+            ))
+        }
+    } else {
+        Err(errors::CommandError::RippleAPIError(
+            "send_message".to_string(),
+            response.code,
+            response.message,
+        ))
+    }
+}
+
+// #[tauri::command]
+// pub async fn read_messages(
+//     conversation_id: String,
+//     message_id: String,
+//     read_size: u32,
+//     data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
+// ) -> Result<ReadMessagesData, errors::CommandError> {
+//     // API has a max limit of 200 messages per request
+//     let capped_read_size = read_size.min(200);
+//     println!("[Commands] read_messages: capping read_size {} -> {}", read_size, capped_read_size);
+//
+//     let result = data_sync
+//         .read_messages(conversation_id, message_id, capped_read_size)
+//         .await?;
+//     Ok(result)
+// }
+
+#[tauri::command]
+pub async fn read_latest_messages(
+    conversation_id: String,
+    read_size: u32,
+    data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
+) -> Result<ReadMessagesData, errors::CommandError> {
+    // API has a max limit of 200 messages per request
+    let capped_read_size = read_size.min(200);
+    println!(
+        "[Commands] read_latest_messages: capping read_size {} -> {}",
+        read_size, capped_read_size
+    );
+
+    let result = data_sync
+        .read_latest_messages(conversation_id, capped_read_size)
+        .await?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn read_messages_before(
+    conversation_id: String,
+    before_message_id: String,
+    read_size: u32,
+    data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
+) -> Result<ReadMessagesData, errors::CommandError> {
+    // API has a max limit of 200 messages per request
+    let capped_read_size = read_size.min(200);
+    println!(
+        "[Commands] read_messages_before: capping read_size {} -> {}",
+        read_size, capped_read_size
+    );
+
+    let result = data_sync
+        .read_messages_before(conversation_id, before_message_id, capped_read_size)
+        .await?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn mark_last_read_message_id(
+    conversation_id: String,
+    message_id: String,
+    data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
+) -> Result<(), errors::CommandError> {
+    let response = data_sync
+        .mark_last_read_message_id(conversation_id, message_id)
+        .await?;
+
+    if response.code == 200 {
+        Ok(())
+    } else {
+        Err(errors::CommandError::RippleAPIError(
+            "mark_last_read_message_id".to_string(),
             response.code,
             response.message,
         ))

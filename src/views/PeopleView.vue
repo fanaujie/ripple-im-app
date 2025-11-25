@@ -368,6 +368,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
 import type { RelationUser } from '../types/relations';
 import HeroIcon from '../components/shared/HeroIcon.vue';
 import { useRelationsDisplay } from '../composables/useRelationsDisplay';
@@ -380,6 +381,9 @@ defineOptions({
 });
 
 type TabType = 'friends' | 'blocked' | 'add';
+
+// Router
+const router = useRouter();
 
 // Local UI state
 const activeTab = ref<TabType>('friends');
@@ -445,9 +449,12 @@ const toggleMenu = (userId: string) => {
 
 // Friends actions
 const handleChat = (friend: RelationUser) => {
-  console.log('Chat with:', friend);
   showMenu.value = null;
-  // TODO: Navigate to chat
+  // Navigate to chat view with userId query parameter
+  router.push({
+    path: '/chat',
+    query: { userId: friend.userId }
+  });
 };
 
 const startEditingName = (friend: RelationUser) => {

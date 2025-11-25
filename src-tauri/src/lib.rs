@@ -86,9 +86,11 @@ pub fn run() {
             commands::stop_server,
             commands::open_signup_url,
             commands::open_auth_url,
-            commands::init_global_data,
+            commands::preload_global_data,
             commands::get_user_profile,
             commands::get_user_profile_by_id,
+            commands::get_relations,
+            commands::get_conversations,
             commands::update_user_avatar,
             commands::update_user_nickname,
             commands::remove_user_avatar,
@@ -98,6 +100,10 @@ pub fn run() {
             commands::block_user,
             commands::unblock_user,
             commands::hide_blocked_user,
+            commands::send_message,
+            commands::read_latest_messages,
+            commands::read_messages_before,
+            commands::mark_last_read_message_id,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

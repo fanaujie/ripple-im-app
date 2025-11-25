@@ -14,7 +14,7 @@ pub mod relation_operation {
     pub const UPDATE_FRIEND_INFO: u64 = 11;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum RelationAction {
     Upsert(RelationUser),
     UpdateRemarkName {

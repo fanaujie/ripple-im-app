@@ -4,10 +4,9 @@ import type { RelationUser } from '../types/relations';
 import { useRelationEvents } from './useRelationEvents';
 import { useRelationsState } from './useRelationsState';
 
-interface GlobalInitData {
-  user_profile: any;
+interface UIRelationData {
   friends: RelationUser[];
-  blockedUsers: RelationUser[];
+  blocked_users: RelationUser[];
 }
 
 /**
@@ -46,11 +45,11 @@ export function useRelationsDisplay() {
 
     try {
       console.log('[useRelationsDisplay] Fetching initial data...');
-      const data = await invoke<GlobalInitData>('init_global_data');
+      const data = await invoke<UIRelationData>('get_relations');
 
-      initialize(data.friends, data.blockedUsers);
+      initialize(data.friends, data.blocked_users);
       console.log(
-        `[useRelationsDisplay] Loaded ${data.friends.length} friends, ${data.blockedUsers.length} blocked`
+        `[useRelationsDisplay] Loaded ${data.friends.length} friends, ${data.blocked_users.length} blocked`
       );
     } catch (err) {
       console.error('[useRelationsDisplay] Failed to initialize relations:', err);
@@ -97,6 +96,26 @@ export function useRelationsDisplay() {
     });
   });
 
+  /**
+   * Map of userId to RelationUser for quick lookup
+   * Combines friends and blocked users
+   */
+  const relationsMap = computed(() => {
+    const map = new Map<string, RelationUser>();
+
+    // Add friends
+    for (const friend of friends.value) {
+      map.set(friend.userId, friend);
+    }
+
+    // Add blocked users
+    for (const blocked of blockedUsers.value) {
+      map.set(blocked.userId, blocked);
+    }
+
+    return map;
+  });
+
   // Initialize on mount
   onMounted(() => {
     initializeRelations();
@@ -118,5 +137,8 @@ export function useRelationsDisplay() {
     // Raw data (without search filter)
     rawFriends: friends,
     rawBlockedUsers: blockedUsers,
+
+    // Relations map for lookup
+    relationsMap,
   };
 }

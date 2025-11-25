@@ -1,3 +1,4 @@
+pub mod conversation_operation;
 pub mod data_sync_manager;
 pub mod default_event_emitter;
 pub mod event_emitter;

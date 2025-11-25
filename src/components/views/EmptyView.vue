@@ -12,15 +12,9 @@
       </h2>
       
       <!-- Description -->
-      <p class="text-text-secondary mb-6 leading-relaxed">
+      <p class="text-text-secondary leading-relaxed">
         {{ description }}
       </p>
-      
-      <!-- Coming Soon Badge -->
-      <div class="inline-flex items-center gap-2 px-4 py-2 bg-accent/10 text-accent rounded-full text-sm font-medium">
-        <div class="w-2 h-2 bg-accent rounded-full animate-pulse"></div>
-        Coming Soon
-      </div>
     </div>
   </div>
 </template>

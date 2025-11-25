@@ -11,6 +11,12 @@ pub struct ApiPaths {
     pub relations_version: String,
     pub friends: String,
     pub blocked_users: String,
+    // Conversation paths
+    pub conversations: String,
+    pub conversations_sync: String,
+    pub conversations_version: String,
+    pub send_message: String,
+    pub read_messages: String,
 }
 
 impl ApiPaths {
@@ -25,6 +31,11 @@ impl ApiPaths {
             relations_version: format!("{}/api/relations/version", api_gateway_url),
             friends: format!("{}/api/relations/friends", api_gateway_url),
             blocked_users: format!("{}/api/relations/blocked-users", api_gateway_url),
+            conversations: format!("{}/api/conversation", api_gateway_url),
+            conversations_sync: format!("{}/api/conversation/sync", api_gateway_url),
+            conversations_version: format!("{}/api/conversation/version", api_gateway_url),
+            send_message: format!("{}/api/conversation/message", api_gateway_url),
+            read_messages: format!("{}/api/conversation/message", api_gateway_url),
         }
     }
 }

@@ -226,7 +226,7 @@ defineOptions({
 });
 
 // Use composables
-const { userProfile, loading: profileLoading, error: profileError } = useUserProfileDisplay();
+const { userProfile } = useUserProfileDisplay();
 
 // Local UI state
 const nicknameInput = ref<string>('');

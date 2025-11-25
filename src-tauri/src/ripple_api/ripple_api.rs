@@ -1,8 +1,9 @@
 use crate::ripple_api::api_paths::ApiPaths;
 use crate::ripple_api::api_response::{
-    AddFriendRequest, BlockUserRequest, CommonResponse, RelationVersionResponse,
-    RelationsPageResponse, RelationsSyncResponse, UpdateFriendDisplayNameRequest,
-    UpdateNickNameRequest, UserProfileResponse,
+    AddFriendRequest, BlockUserRequest, CommonResponse, ConversationSyncResponse,
+    ConversationVersionResponse, ConversationsResponse, MessageResponse, ReadMessagesResponse,
+    RelationVersionResponse, RelationsPageResponse, RelationsSyncResponse, SendMessageRequest,
+    UpdateFriendDisplayNameRequest, UpdateNickNameRequest, UserProfileResponse,
 };
 use crate::ripple_api::oauth_client::OauthClient;
 use crate::store_engine::store_engine::StoreEngine;
@@ -482,5 +483,191 @@ where
             )
             .await?;
         Ok(res.json::<RelationVersionResponse>().await?)
+    }
+
+    // ==================== Conversation APIs ====================
+
+    pub async fn get_conversations(
+        &self,
+        next_page_token: Option<String>,
+        page_size: u32,
+    ) -> anyhow::Result<ConversationsResponse> {
+        #[derive(Serialize)]
+        struct Params {
+            #[serde(rename = "nextPageToken", skip_serializing_if = "Option::is_none")]
+            next_page_token: Option<String>,
+            #[serde(rename = "pageSize")]
+            page_size: u32,
+        }
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let next_page_token_clone = next_page_token.clone();
+                    async move {
+                        let params = Params {
+                            next_page_token: next_page_token_clone,
+                            page_size,
+                        };
+                        self.reqwest_client
+                            .get(&self.api_paths.conversations)
+                            .header("Authorization", format!("Bearer {}", access_token))
+                            .query(&params)
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to get conversations: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<ConversationsResponse>().await?)
+    }
+
+    pub async fn sync_conversations(
+        &self,
+        last_version: Option<String>,
+    ) -> anyhow::Result<ConversationSyncResponse> {
+        #[derive(Serialize)]
+        struct Params {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            version: Option<String>,
+        }
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let last_version_clone = last_version.clone();
+                    async move {
+                        let request = self
+                            .reqwest_client
+                            .get(&self.api_paths.conversations_sync)
+                            .header("Authorization", format!("Bearer {}", access_token));
+
+                        let params = Params {
+                            version: last_version_clone,
+                        };
+                        request
+                            .query(&params)
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to sync conversations: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<ConversationSyncResponse>().await?)
+    }
+
+    pub async fn get_conversation_version(&self) -> anyhow::Result<ConversationVersionResponse> {
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| async move {
+                    self.reqwest_client
+                        .get(&self.api_paths.conversations_version)
+                        .header("Authorization", format!("Bearer {}", access_token))
+                        .send()
+                        .await
+                        .map_err(|e| anyhow!("Failed to get conversation version: {}", e))
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<ConversationVersionResponse>().await?)
+    }
+
+    pub async fn send_message(
+        &self,
+        request: SendMessageRequest,
+    ) -> anyhow::Result<MessageResponse> {
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let request = request.clone();
+                    async move {
+                        self.reqwest_client
+                            .post(&self.api_paths.send_message)
+                            .header("Authorization", format!("Bearer {}", access_token))
+                            .header("Content-Type", "application/json")
+                            .json(&request)
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to send message: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<MessageResponse>().await?)
+    }
+
+    pub async fn read_messages(
+        &self,
+        conversation_id: String,
+        message_id: String,
+        read_size: u32,
+    ) -> anyhow::Result<ReadMessagesResponse> {
+        #[derive(Serialize, Clone)]
+        struct ReadMessagesParams {
+            #[serde(rename = "conversationId")]
+            conversation_id: String,
+            #[serde(rename = "messageId")]
+            message_id: String,
+            #[serde(rename = "readSize")]
+            read_size: u32,
+        }
+
+        let params = ReadMessagesParams {
+            conversation_id,
+            message_id,
+            read_size,
+        };
+
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let params = params.clone();
+                    async move {
+                        self.reqwest_client
+                            .get(&self.api_paths.read_messages)
+                            .header("Authorization", format!("Bearer {}", access_token))
+                            .query(&params)
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to read messages: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<ReadMessagesResponse>().await?)
+    }
+
+    pub async fn mark_last_read_message_id(
+        &self,
+        conversation_id: String,
+        message_id: String,
+    ) -> anyhow::Result<CommonResponse> {
+        let url = format!(
+            "{}/{}/message/{}/mark-read",
+            &self.api_paths.conversations, conversation_id, message_id
+        );
+
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let url = url.clone();
+                    async move {
+                        self.reqwest_client
+                            .put(&url)
+                            .header("Authorization", format!("Bearer {}", access_token))
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to mark last read message: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<CommonResponse>().await?)
     }
 }

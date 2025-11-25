@@ -70,15 +70,6 @@ impl From<&RelationChange> for RelationUser {
         }
     }
 }
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct GlobalInitData {
-    pub user_profile: UserProfileData,
-    pub friends: Vec<RelationUser>,
-    #[serde(rename = "blockedUsers")]
-    pub blocked_users: Vec<RelationUser>,
-}
-
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RelationsPageData {
     pub users: Vec<RelationUser>,
@@ -137,4 +128,168 @@ pub struct RelationVersionResponse {
     pub code: i64,
     pub message: String,
     pub data: RelationVersionData,
+}
+
+// ==================== Conversation Types ====================
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ConversationItem {
+    #[serde(rename = "conversationId")]
+    pub conversation_id: String,
+    #[serde(rename = "peerId")]
+    pub peer_id: Option<String>,
+    #[serde(rename = "groupId")]
+    pub group_id: Option<String>,
+    #[serde(rename = "lastMessageId")]
+    pub last_message_id: String,
+    #[serde(rename = "lastMessage")]
+    pub last_message: String,
+    #[serde(rename = "lastMessageTimestamp")]
+    pub last_message_timestamp: i64,
+    #[serde(rename = "lastReadMessageId")]
+    pub last_read_message_id: Option<String>,
+    #[serde(rename = "unreadCount")]
+    pub unread_count: i64,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ConversationsData {
+    pub conversations: Vec<ConversationItem>,
+    #[serde(rename = "nextPageToken")]
+    pub next_page_token: Option<String>,
+    #[serde(rename = "hasMore")]
+    pub has_more: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ConversationsResponse {
+    pub code: i64,
+    pub message: String,
+    pub data: ConversationsData,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ConversationChange {
+    pub version: String,
+    pub operation: i32,
+    #[serde(rename = "conversationId")]
+    pub conversation_id: String,
+    #[serde(rename = "peerId")]
+    pub peer_id: Option<String>,
+    #[serde(rename = "groupId")]
+    pub group_id: Option<String>,
+    #[serde(rename = "lastMessageId")]
+    pub last_message_id: Option<String>,
+    #[serde(rename = "lastMessage")]
+    pub last_message: Option<String>,
+    #[serde(rename = "lastMessageTimestamp")]
+    pub last_message_timestamp: Option<i64>,
+    #[serde(rename = "lastReadMessageId")]
+    pub last_read_message_id: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ConversationSyncData {
+    #[serde(rename = "fullSync")]
+    pub full_sync: bool,
+    #[serde(rename = "latestVersion")]
+    pub latest_version: Option<String>,
+    pub changes: Vec<ConversationChange>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ConversationSyncResponse {
+    pub code: i64,
+    pub message: String,
+    pub data: ConversationSyncData,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ConversationVersionData {
+    #[serde(rename = "latestVersion")]
+    pub latest_version: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ConversationVersionResponse {
+    pub code: i64,
+    pub message: String,
+    pub data: ConversationVersionData,
+}
+
+// ==================== Message Types ====================
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct SendMessageRequest {
+    #[serde(rename = "senderId")]
+    pub sender_id: String,
+    #[serde(rename = "conversationId")]
+    pub conversation_id: String,
+    #[serde(rename = "receiverId")]
+    pub receiver_id: String,
+    #[serde(rename = "textContent", skip_serializing_if = "Option::is_none")]
+    pub text_content: Option<String>,
+    #[serde(rename = "fileUrl", skip_serializing_if = "Option::is_none")]
+    pub file_url: Option<String>,
+    #[serde(rename = "fileName", skip_serializing_if = "Option::is_none")]
+    pub file_name: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct MessageResponseData {
+    #[serde(rename = "messageId")]
+    pub message_id: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct MessageResponse {
+    pub code: i64,
+    pub message: String,
+    pub data: Option<MessageResponseData>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct MessageItem {
+    #[serde(rename = "conversationId")]
+    pub conversation_id: String,
+    #[serde(rename = "messageId")]
+    pub message_id: String,
+    #[serde(rename = "senderId")]
+    pub sender_id: String,
+    #[serde(rename = "receiverId")]
+    pub receiver_id: Option<String>,
+    #[serde(rename = "groupId")]
+    pub group_id: Option<String>,
+    #[serde(rename = "sendTimestamp")]
+    pub send_timestamp: i64,
+    #[serde(rename = "textContent")]
+    pub text_content: Option<String>,
+    #[serde(rename = "fileUrl")]
+    pub file_url: Option<String>,
+    #[serde(rename = "fileName")]
+    pub file_name: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ReadMessagesData {
+    pub messages: Vec<MessageItem>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ReadMessagesResponse {
+    pub code: i64,
+    pub message: String,
+    pub data: ReadMessagesData,
+}
+
+impl ReadMessagesResponse {
+    pub fn error(code: i64, message: &str) -> Self {
+        ReadMessagesResponse {
+            code,
+            message: message.to_string(),
+            data: ReadMessagesData {
+                messages: Vec::new(),
+            },
+        }
+    }
 }
