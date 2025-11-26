@@ -2,34 +2,55 @@ use crate::app_config::AppConfig;
 use crate::ripple_api::RippleApi;
 use crate::ripple_syncer::default_event_emitter::DefaultEventEmitter;
 use crate::ripple_syncer::incremental_sync_manager::IncrementalSyncManager;
+use crate::ripple_syncer::DataSyncManager;
 use crate::ripple_ws::ripple_ws_manager::RippleWsManager;
 use crate::ripple_ws::sync_aware_ws_message_handler::SyncAwareWsMessageHandler;
 use crate::ripple_ws::syncer_control::SyncerControl;
-use crate::store_engine::store_engine::StoreEngine;
+use crate::server::HtmlFile::{AuthFailed, AuthSuccess, AuthSuccessRestart, InvalidState};
 use crate::DefaultStoreEngine;
 use axum::extract::{Query, State};
 use axum::response::Html;
 use axum::routing::get;
 use axum::Router;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::net::ToSocketAddrs;
 use tokio::task::JoinHandle;
-use uuid::Uuid;
 
 type SyncerAwareMsgHandlerType =
     SyncAwareWsMessageHandler<IncrementalSyncManager<DefaultStoreEngine, DefaultEventEmitter>>;
 
 type WsManagerType = RippleWsManager<SyncerAwareMsgHandlerType>;
-async fn load_html_file(app: &AppHandle, filename: &str) -> String {
-    let path = format!("resources/{}", filename);
+
+enum HtmlFile {
+    InvalidState,
+    AuthSuccess,
+    AuthFailed,
+    AuthSuccessRestart,
+}
+
+impl Display for HtmlFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let filename = match self {
+            InvalidState => "invalid-state.html",
+            AuthSuccess => "auth-success.html",
+            AuthFailed => "auth-failed.html",
+            AuthSuccessRestart => "auth-success-restart.html",
+        };
+        write!(f, "{}", filename)
+    }
+}
+
+async fn load_html_file(app: &AppHandle, html_file: HtmlFile) -> String {
+    let path = format!("resources/{}", html_file);
     let resource_path = match app.path().resolve(path, BaseDirectory::Resource) {
         Err(e) => {
             eprintln!("Failed to resolve resource path: {}", e);
             return format!(
                 "<h1>Error</h1><p>Failed to resolve resource path: {}</p><p>Details: {}</p>",
-                filename, e
+                html_file, e
             );
         }
         Ok(path_buffer) => path_buffer,
@@ -39,11 +60,11 @@ async fn load_html_file(app: &AppHandle, filename: &str) -> String {
         Err(e) => {
             eprintln!(
                 "Failed to read HTML file {} from path {:?}: {}",
-                filename, resource_path, e
+                html_file, resource_path, e
             );
             format!(
                 "<h1>Error</h1><p>Failed to read file: {}</p><p>Path: {:?}</p><p>Reason: {}</p>",
-                filename, resource_path, e
+                html_file, resource_path, e
             )
         }
     }
@@ -130,11 +151,28 @@ async fn handler(
         .app_handle
         .state::<RippleApi<DefaultStoreEngine>>();
     if !ripple.oauth_state_equal(&params.state) {
-        return Html(load_html_file(&api_state.app_handle, "invalid-state.html").await);
+        return Html(load_html_file(&api_state.app_handle, InvalidState).await);
     }
     match ripple.oauth_request_token(params.code).await {
         Ok(_) => {
-            // Emit auth success event to frontend
+            // Initialize data first (profile, relations, conversations)
+            let app_handle = api_state.app_handle.clone();
+            let data_sync = app_handle.state::<DataSyncManager<DefaultStoreEngine>>();
+            if let Err(e) = data_sync.init().await {
+                eprintln!("Failed to initialize DataSyncManager: {}", e);
+                return Html(load_html_file(&api_state.app_handle, AuthSuccessRestart).await);
+            }
+
+            // Start WebSocket and syncer in background
+            tauri::async_runtime::spawn(async move {
+                let ws_manager = app_handle.state::<WsManagerType>();
+                let syncer = app_handle.state::<SyncerAwareMsgHandlerType>();
+                syncer.start_syncer().await.unwrap();
+                let config = app_handle.state::<AppConfig>();
+                ws_manager.start(&config.ws_gateway_url).await.unwrap();
+            });
+
+            // Emit auth success event to frontend AFTER initialization completes
             if let Err(e) = api_state.app_handle.emit(
                 "auth-result",
                 AuthenticationState {
@@ -143,32 +181,9 @@ async fn handler(
                 },
             ) {
                 eprintln!("Failed to emit auth-result event: {}", e);
-                return Html(
-                    load_html_file(&api_state.app_handle, "auth-success-restart.html").await,
-                );
             }
-            let app_handle = api_state.app_handle.clone();
-            tauri::async_runtime::spawn(async move {
-                let store = app_handle.state::<DefaultStoreEngine>();
-                let ws_manager = app_handle.state::<WsManagerType>();
-                let syncer = app_handle.state::<SyncerAwareMsgHandlerType>();
-                syncer.start_syncer().await.unwrap();
-                let config = app_handle.state::<AppConfig>();
-                let uuid = store.get_device_id().await.unwrap();
-                let device_id = if let Some(id) = uuid {
-                    id
-                } else {
-                    let new_id = Uuid::new_v4();
-                    store.save_device_id(&new_id).await.unwrap();
-                    new_id
-                };
-                let token = store.get_token().await.unwrap();
-                ws_manager
-                    .start(&config.ws_gateway_url, &token.access_token, device_id)
-                    .await
-                    .unwrap();
-            });
-            Html(load_html_file(&api_state.app_handle, "auth-success.html").await)
+
+            Html(load_html_file(&api_state.app_handle, AuthSuccess).await)
         }
         Err(e) => {
             // Emit auth failure event to frontend
@@ -181,7 +196,7 @@ async fn handler(
             ) {
                 eprintln!("Failed to emit auth-result event: {}", e);
             }
-            Html(load_html_file(&api_state.app_handle, "auth-failed.html").await)
+            Html(load_html_file(&api_state.app_handle, AuthFailed).await)
         }
     }
 }

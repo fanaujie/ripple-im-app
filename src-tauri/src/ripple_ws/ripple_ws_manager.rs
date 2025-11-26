@@ -1,7 +1,9 @@
 use crate::ripple_api::auth_token_parser::AuthTokenParser;
+use crate::ripple_syncer::DataSyncManager;
 use crate::ripple_ws::syncer_control::SyncerControl;
 use crate::ripple_ws::ws_message_handler::RippleWsMsgHandler;
 use crate::ripple_ws::ws_utils::WsUtilsHeartbeatRequest;
+use crate::DefaultStoreEngine;
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
 use futures_channel::mpsc::UnboundedSender;
@@ -12,7 +14,6 @@ use tokio::sync::Mutex;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
-use uuid::Uuid;
 
 const HEADER_AUTHORIZATION: &'static str = "Authorization";
 const HEADER_RIPPLE_DEVICE_ID: &'static str = "Ripple-Device-ID";
@@ -24,33 +25,41 @@ where
     message_handler: R,
     sender_tx: Arc<Mutex<Option<UnboundedSender<Message>>>>,
     is_running: AtomicBool,
+    data_sync: DataSyncManager<DefaultStoreEngine>,
 }
 
 impl<R> RippleWsManager<R>
 where
     R: RippleWsMsgHandler + SyncerControl,
 {
-    pub fn new(msg_handler: R) -> RippleWsManager<R> {
+    pub fn new(
+        msg_handler: R,
+        data_sync: DataSyncManager<DefaultStoreEngine>,
+    ) -> RippleWsManager<R> {
         RippleWsManager {
             message_handler: msg_handler,
             sender_tx: Arc::new(Mutex::new(None)),
             is_running: AtomicBool::new(false),
+            data_sync,
         }
     }
-    pub async fn start(&self, ws_url: &str, token: &str, device_id: Uuid) -> anyhow::Result<()> {
+    pub async fn start(&self, ws_url: &str) -> anyhow::Result<()> {
         if self.is_running.load(Ordering::Relaxed) {
-            return Err(anyhow::anyhow!("WebSocket manager is running"));
+            anyhow::bail!("WebSocket manager is running");
         }
-        let claims = AuthTokenParser::decode_jwt_payload(token)?;
+        let token = self.data_sync.get_token().await?;
+        let claims = AuthTokenParser::decode_jwt_payload(&token.access_token)?;
         let user_id = claims.get_sub();
+        let device_id = self.data_sync.get_device_id().await?;
         println!(
             "Ws client run: User ID: {} Device ID: {}",
             user_id, device_id
         );
         let mut request = ws_url.into_client_request()?;
-        request
-            .headers_mut()
-            .insert(HEADER_AUTHORIZATION, format!("Bearer {}", token).parse()?);
+        request.headers_mut().insert(
+            HEADER_AUTHORIZATION,
+            format!("Bearer {}", &token.access_token).parse()?,
+        );
         request
             .headers_mut()
             .insert(HEADER_RIPPLE_DEVICE_ID, device_id.to_string().parse()?);

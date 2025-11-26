@@ -6,8 +6,9 @@ use crate::ripple_syncer::conversation_operation::ConversationAction;
 use crate::ripple_syncer::relation_operation::RelationAction;
 use crate::ripple_syncer::ui_event::{BLOCKED_FLAG, FRIEND_FLAG, HIDDEN_FLAG};
 use crate::store_engine::store_engine::{
-    RippleStorage, StorageConversationData, StorageMessageData,
+    RippleStorage, StorageConversationData, StorageMessageData, Token,
 };
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct DataSyncManager<S: RippleStorage> {
@@ -20,6 +21,39 @@ impl<S: RippleStorage> DataSyncManager<S> {
         DataSyncManager {
             ripple_api,
             store_engine,
+        }
+    }
+
+    pub async fn init(&self) -> anyhow::Result<()> {
+        let uuid = self.store_engine.get_device_id().await?;
+        if uuid.is_none() {
+            let new_id = Uuid::new_v4();
+            self.store_engine.save_device_id(&new_id).await?;
+        }
+        if !self.exists_profile().await? {
+            self.sync_user_profile().await?;
+        }
+        if !self.exist_relations().await? {
+            self.sync_all_relations().await?;
+        }
+        if !self.exist_conversations().await? {
+            self.sync_all_conversations().await?;
+        }
+        Ok(())
+    }
+
+    pub async fn get_device_id(&self) -> anyhow::Result<Uuid> {
+        let uuid = self.store_engine.get_device_id().await?;
+        match uuid {
+            Some(id) => Ok(id),
+            None => anyhow::bail!("Device ID not found in storage"),
+        }
+    }
+
+    pub async fn get_token(&self) -> anyhow::Result<Token> {
+        match self.store_engine.get_token().await? {
+            Some(token) => Ok(token),
+            None => anyhow::bail!("Auth token not found in storage"),
         }
     }
 
@@ -179,6 +213,7 @@ impl<S: RippleStorage> DataSyncManager<S> {
             .into_iter()
             .map(|item| item.into())
             .collect();
+        self.store_engine.clear_all_conversations().await?;
         self.store_engine
             .apply_conversation_all(storage_conversation_data, &last_version)
             .await?;

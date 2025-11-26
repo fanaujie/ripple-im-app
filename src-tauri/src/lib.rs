@@ -64,16 +64,16 @@ pub fn run() {
                 oauth_client,
                 store.clone(),
             );
-            let data_sync = DataSyncManager::new(ripple_api.clone(), store.clone());
+            let data_sync = DataSyncManager::new(ripple_api.clone(), store);
             let emitter = DefaultEventEmitter::new(app.handle().clone());
             let syncer = IncrementalSyncManager::new(data_sync.clone(), emitter);
             let sync_aware_msg_handler = SyncAwareWsMessageHandler::new(syncer);
-            let ws_manager = RippleWsManager::new(sync_aware_msg_handler.clone());
+            let ws_manager =
+                RippleWsManager::new(sync_aware_msg_handler.clone(), data_sync.clone());
             app.manage(ripple_api);
             app.manage(data_sync);
             app.manage(sync_aware_msg_handler);
             app.manage(ws_manager);
-            app.manage(store);
             app.manage(app_config); // read-only, no mutex needed
             app.manage(tokio::sync::Mutex::new(Server::new()));
             Ok(())
@@ -86,7 +86,6 @@ pub fn run() {
             commands::stop_server,
             commands::open_signup_url,
             commands::open_auth_url,
-            commands::preload_global_data,
             commands::get_user_profile,
             commands::get_user_profile_by_id,
             commands::get_relations,

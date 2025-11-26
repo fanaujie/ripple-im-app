@@ -60,26 +60,6 @@ pub fn open_auth_url(app: AppHandle) -> Result<(), errors::CommandError> {
 }
 
 #[tauri::command]
-pub async fn preload_global_data(
-    data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
-) -> Result<(), errors::CommandError> {
-    if !data_sync.exists_profile().await? {
-        data_sync.sync_user_profile().await?;
-    }
-    if !data_sync.exist_relations().await? {
-        data_sync.sync_all_relations().await?;
-    }
-    if !data_sync.exist_conversations().await? {
-        data_sync.sync_all_conversations().await?;
-    }
-
-    // With the new unread_count refactor, we no longer need to preload messages
-    // to calculate accurate unread counts. The counts are now maintained incrementally.
-
-    Ok(())
-}
-
-#[tauri::command]
 pub async fn get_user_profile(
     data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
 ) -> Result<UserProfileData, errors::CommandError> {
@@ -315,10 +295,6 @@ pub async fn get_conversations(
         Some(_profile) => {
             for conversation in cached_conversations {
                 let ui_conversation: UIConversationItem = conversation.into();
-
-                // unread_count is now properly maintained in storage
-                // No need to recalculate here
-
                 conversations.push(ui_conversation);
             }
             Ok(UIConversations {
@@ -370,23 +346,6 @@ pub async fn send_message(
         ))
     }
 }
-
-// #[tauri::command]
-// pub async fn read_messages(
-//     conversation_id: String,
-//     message_id: String,
-//     read_size: u32,
-//     data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
-// ) -> Result<ReadMessagesData, errors::CommandError> {
-//     // API has a max limit of 200 messages per request
-//     let capped_read_size = read_size.min(200);
-//     println!("[Commands] read_messages: capping read_size {} -> {}", read_size, capped_read_size);
-//
-//     let result = data_sync
-//         .read_messages(conversation_id, message_id, capped_read_size)
-//         .await?;
-//     Ok(result)
-// }
 
 #[tauri::command]
 pub async fn read_latest_messages(

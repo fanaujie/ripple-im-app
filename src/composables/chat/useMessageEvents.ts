@@ -19,7 +19,7 @@ import type { MessageUpdateEvent } from '../../types/chat';
  * @param onEvent - Callback function to handle message updates
  */
 export function useMessageEvents(
-  activeConversationId: Ref<string | null>,
+  _activeConversationId: Ref<string | null>,
   onEvent: (event: MessageUpdateEvent) => void
 ) {
   let unlistenFn: UnlistenFn | null = null;

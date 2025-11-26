@@ -1,6 +1,5 @@
-use crate::ripple_api::api_response::{MessageItem, RelationUser};
+use crate::ripple_api::api_response::RelationUser;
 use crate::ripple_syncer::event_emitter::{UIConversationItem, UIMessageItem};
-use ripple_proto::ripple_pb::PushMessageRequest;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 

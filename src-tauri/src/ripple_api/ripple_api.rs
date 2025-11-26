@@ -6,7 +6,7 @@ use crate::ripple_api::api_response::{
     UpdateFriendDisplayNameRequest, UpdateNickNameRequest, UserProfileResponse,
 };
 use crate::ripple_api::oauth_client::OauthClient;
-use crate::store_engine::store_engine::StoreEngine;
+use crate::store_engine::StoreEngine;
 use anyhow::anyhow;
 use mime::Mime;
 use oauth2::{reqwest, TokenResponse};
@@ -57,11 +57,12 @@ where
     {
         let mut attempts = 0u8;
         loop {
-            let token = self
-                .store_engine
-                .get_token()
-                .await
-                .map_err(|e| anyhow!("Failed to get token: {}", e))?;
+            let token = match self.store_engine.get_token().await? {
+                Some(t) => t,
+                None => {
+                    anyhow::bail!("No authentication token found. Please login.");
+                }
+            };
             let res = api_call(token.access_token).await?;
             match res.status() {
                 StatusCode::OK => return Ok(res),

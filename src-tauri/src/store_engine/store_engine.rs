@@ -162,7 +162,7 @@ pub trait StoreEngine: Sync + Clone + 'static {
 
     async fn get_device_id(&self) -> anyhow::Result<Option<Uuid>>;
     async fn save_device_id(&self, device_id: &Uuid) -> anyhow::Result<()>;
-    async fn get_token(&self) -> anyhow::Result<Token>;
+    async fn get_token(&self) -> anyhow::Result<Option<Token>>;
     async fn save_token(&self, access_token: &str, refresh_token: &str) -> anyhow::Result<()>;
     async fn get_user_profile(&self) -> anyhow::Result<Option<UserProfileData>>;
     async fn save_user_profile(&self, profile: &UserProfileData) -> anyhow::Result<()>;
@@ -202,12 +202,6 @@ pub trait StoreEngine: Sync + Clone + 'static {
     async fn get_conversation_version(&self) -> anyhow::Result<Option<String>>;
     async fn clear_all_conversations(&self) -> anyhow::Result<()>;
     async fn store_message(&self, message: StorageMessageData) -> anyhow::Result<()>;
-    async fn get_messages(
-        &self,
-        conversation_id: &str,
-        from_message_id: Option<i64>,
-        limit: u32,
-    ) -> anyhow::Result<Vec<StorageMessageData>>;
     async fn get_latest_messages(
         &self,
         conversation_id: &str,
@@ -292,16 +286,15 @@ impl RippleStorage for MemoryStore {
         Ok(())
     }
 
-    async fn get_token(&self) -> anyhow::Result<Token> {
+    async fn get_token(&self) -> anyhow::Result<Option<Token>> {
         let inner = self.inner.lock().await;
-        if let Some(token) = &inner.access_token {
-            Ok(Token {
-                access_token: inner.access_token.clone().unwrap(),
-                refresh_token: inner.refresh_token.clone().unwrap(),
-            })
-        } else {
-            Err(anyhow::anyhow!("No token found"))
+        if inner.access_token.is_none() || inner.refresh_token.is_none() {
+            return Ok(None);
         }
+        Ok(Some(Token {
+            access_token: inner.access_token.clone().unwrap(),
+            refresh_token: inner.refresh_token.clone().unwrap(),
+        }))
     }
 
     async fn save_token(&self, access_token: &str, refresh_token: &str) -> anyhow::Result<()> {
@@ -506,10 +499,6 @@ impl RippleStorage for MemoryStore {
     }
 
     async fn store_message(&self, message: StorageMessageData) -> anyhow::Result<()> {
-        println!(
-            "[StoreEngine] Storing message: msg_id={}, conv_id={}",
-            message.message_id, message.conversation_id
-        );
         let mut inner = self.inner.lock().await;
         let conversation_messages = inner
             .messages
@@ -517,72 +506,7 @@ impl RippleStorage for MemoryStore {
             .or_insert_with(BTreeMap::new);
 
         conversation_messages.insert(message.message_id, message.clone());
-        println!(
-            "[StoreEngine] Message stored. Total messages for conv_id {}: {}",
-            message.conversation_id,
-            conversation_messages.len()
-        );
         Ok(())
-    }
-
-    async fn get_messages(
-        &self,
-        conversation_id: &str,
-        from_message_id: Option<i64>,
-        limit: u32,
-    ) -> anyhow::Result<Vec<StorageMessageData>> {
-        println!(
-            "[StoreEngine] get_messages called: conv_id={}, from_id={:?}, limit={}",
-            conversation_id, from_message_id, limit
-        );
-
-        let inner = self.inner.lock().await;
-
-        println!(
-            "[StoreEngine] Current conversations in storage: {:?}",
-            inner.messages.keys().collect::<Vec<_>>()
-        );
-
-        // Get messages for this conversation
-        let messages = match inner.messages.get(conversation_id) {
-            Some(msgs) => {
-                println!(
-                    "[StoreEngine] Found {} messages for conv_id {}",
-                    msgs.len(),
-                    conversation_id
-                );
-                msgs
-            }
-            None => {
-                eprintln!(
-                    "[StoreEngine] No messages found for conv_id {}",
-                    conversation_id
-                );
-                return Ok(Vec::new());
-            }
-        };
-
-        // Filter and limit messages
-        let filtered: Vec<StorageMessageData> = if let Some(from_id) = from_message_id {
-            messages
-                .iter()
-                .filter(|(msg_id, _)| **msg_id >= from_id)
-                .take(limit as usize)
-                .map(|(_, msg)| msg.clone())
-                .collect()
-        } else {
-            messages
-                .iter()
-                .take(limit as usize)
-                .map(|(_, msg)| msg.clone())
-                .collect()
-        };
-
-        println!(
-            "[StoreEngine] Returning {} filtered messages",
-            filtered.len()
-        );
-        Ok(filtered)
     }
 
     async fn get_latest_messages(
@@ -590,23 +514,10 @@ impl RippleStorage for MemoryStore {
         conversation_id: &str,
         limit: u32,
     ) -> anyhow::Result<Vec<StorageMessageData>> {
-        println!(
-            "[StoreEngine] get_latest_messages called: conv_id={}, limit={}",
-            conversation_id, limit
-        );
-
         let inner = self.inner.lock().await;
 
-        // Get messages for this conversation
         let messages = match inner.messages.get(conversation_id) {
-            Some(msgs) => {
-                println!(
-                    "[StoreEngine] Found {} messages for conv_id {}",
-                    msgs.len(),
-                    conversation_id
-                );
-                msgs
-            }
+            Some(msgs) => msgs,
             None => {
                 println!(
                     "[StoreEngine] No messages found for conv_id {}",
@@ -637,33 +548,15 @@ impl RippleStorage for MemoryStore {
         before_message_id: i64,
         limit: u32,
     ) -> anyhow::Result<Vec<StorageMessageData>> {
-        println!(
-            "[StoreEngine] get_messages_before called: conv_id={}, before_id={}, limit={}",
-            conversation_id, before_message_id, limit
-        );
-
         let inner = self.inner.lock().await;
 
-        // Get messages for this conversation
         let messages = match inner.messages.get(conversation_id) {
-            Some(msgs) => {
-                println!(
-                    "[StoreEngine] Found {} messages for conv_id {}",
-                    msgs.len(),
-                    conversation_id
-                );
-                msgs
-            }
+            Some(msgs) => msgs,
             None => {
-                println!(
-                    "[StoreEngine] No messages found for conv_id {}",
-                    conversation_id
-                );
                 return Ok(Vec::new());
             }
         };
 
-        // Use range to get messages with id < before_message_id
         let mut result: Vec<StorageMessageData> = messages
             .range(..before_message_id)
             .rev()
@@ -673,12 +566,6 @@ impl RippleStorage for MemoryStore {
 
         // Reverse to maintain old-to-new order
         result.reverse();
-
-        println!(
-            "[StoreEngine] Returning {} messages before id {}",
-            result.len(),
-            before_message_id
-        );
         Ok(result)
     }
 }

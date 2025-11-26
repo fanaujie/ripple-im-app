@@ -21,7 +21,7 @@ export function useUserProfileDisplay() {
     error.value = null;
 
     try {
-      // Load from Rust StorageEngine (fast, already cached by preload_global_data)
+      // Load from Rust StorageEngine (fast, cached in memory)
       const profile = await loadUserProfile();
       userProfile.value = profile;
     } catch (err) {

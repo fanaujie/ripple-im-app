@@ -1,4 +1,4 @@
-use crate::ripple_api::api_response::{ConversationChange, MessageItem, RelationChange};
+use crate::ripple_api::api_response::{ConversationChange, RelationChange};
 use crate::ripple_syncer::conversation_operation::{
     conversation_event_action, conversation_operation, ConversationAction,
 };
