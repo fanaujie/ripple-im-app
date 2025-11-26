@@ -285,33 +285,15 @@ impl<S: RippleStorage> DataSyncManager<S> {
         conversation_id: String,
         read_size: u32,
     ) -> anyhow::Result<ReadMessagesData> {
-        println!(
-            "[DataSyncManager] read_latest_messages called: conversation_id={}, read_size={}",
-            conversation_id, read_size
-        );
-
         let storage_messages = self
             .store_engine
             .get_latest_messages(&conversation_id, read_size)
             .await?;
 
-        println!(
-            "[DataSyncManager] Retrieved {} latest messages from storage for conversation {}",
-            storage_messages.len(),
-            conversation_id
-        );
-
         if storage_messages.len() >= read_size as usize {
             let messages: Vec<_> = storage_messages.into_iter().map(|msg| msg.into()).collect();
-            println!("[DataSyncManager] Returning latest messages from storage (sufficient count)");
             return Ok(ReadMessagesData { messages });
         }
-
-        // If we don't have enough messages in storage, fall back to API
-        println!(
-            "[DataSyncManager] Not enough messages in storage, fetching from API for conversation {}",
-            conversation_id
-        );
         let api_response = self
             .ripple_api
             .read_messages(conversation_id.clone(), "0".to_string(), read_size)
@@ -328,15 +310,9 @@ impl<S: RippleStorage> DataSyncManager<S> {
                 api_response.message
             )
         }
-
-        println!(
-            "[DataSyncManager] API returned {} messages, storing them",
-            api_response.data.messages.len()
-        );
         for message_item in &api_response.data.messages {
             self.store_engine.store_message(message_item.into()).await?;
         }
-        println!("[DataSyncManager] Latest messages stored successfully");
         Ok(api_response.data)
     }
 
@@ -346,14 +322,8 @@ impl<S: RippleStorage> DataSyncManager<S> {
         before_message_id: String,
         read_size: u32,
     ) -> anyhow::Result<ReadMessagesData> {
-        println!(
-            "[DataSyncManager] read_messages_before called: conversation_id={}, before_message_id={}, read_size={}",
-            conversation_id, before_message_id, read_size
-        );
-
         let before_id = before_message_id.parse::<i64>().unwrap_or(0);
         if before_id == 0 {
-            println!("[DataSyncManager] Invalid before_message_id, returning empty");
             return Ok(ReadMessagesData {
                 messages: Vec::new(),
             });
@@ -364,20 +334,11 @@ impl<S: RippleStorage> DataSyncManager<S> {
             .get_messages_before(&conversation_id, before_id, read_size)
             .await?;
 
-        println!(
-            "[DataSyncManager] Retrieved {} messages before id {} from storage",
-            storage_messages.len(),
-            before_id
-        );
-
         if storage_messages.len() >= read_size as usize {
             let messages: Vec<_> = storage_messages.into_iter().map(|msg| msg.into()).collect();
-            println!("[DataSyncManager] Returning messages from storage (sufficient count)");
             return Ok(ReadMessagesData { messages });
         }
 
-        // If we don't have enough messages in storage, fetch from API
-        println!("[DataSyncManager] Not enough messages in storage, fetching from API");
         let api_response = self
             .ripple_api
             .read_messages(conversation_id.clone(), "0".to_string(), read_size)
@@ -394,11 +355,6 @@ impl<S: RippleStorage> DataSyncManager<S> {
                 api_response.message
             )
         }
-
-        println!(
-            "[DataSyncManager] API returned {} messages, storing them",
-            api_response.data.messages.len()
-        );
         for message_item in &api_response.data.messages {
             self.store_engine.store_message(message_item.into()).await?;
         }
@@ -410,10 +366,6 @@ impl<S: RippleStorage> DataSyncManager<S> {
             .await?;
 
         let messages: Vec<_> = storage_messages.into_iter().map(|msg| msg.into()).collect();
-        println!(
-            "[DataSyncManager] Returning {} messages after API fetch and store",
-            messages.len()
-        );
         Ok(ReadMessagesData { messages })
     }
 

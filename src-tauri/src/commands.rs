@@ -139,7 +139,6 @@ pub async fn remove_user_avatar(
 
 #[tauri::command]
 pub async fn add_friend(
-    app: AppHandle,
     target_user_id: String,
     state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<(), errors::CommandError> {
@@ -157,7 +156,6 @@ pub async fn add_friend(
 
 #[tauri::command]
 pub async fn remove_friend(
-    app: AppHandle,
     friend_id: String,
     state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<(), errors::CommandError> {
@@ -175,7 +173,6 @@ pub async fn remove_friend(
 
 #[tauri::command]
 pub async fn update_friend_display_name(
-    app: AppHandle,
     friend_id: String,
     remark_name: String,
     state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
@@ -195,9 +192,7 @@ pub async fn update_friend_display_name(
 
 #[tauri::command]
 pub async fn block_user(
-    app: AppHandle,
     target_user_id: String,
-    display_name: Option<String>,
     state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<(), errors::CommandError> {
     let response = state_ripple.block_user(target_user_id).await?;
@@ -213,7 +208,6 @@ pub async fn block_user(
 
 #[tauri::command]
 pub async fn unblock_user(
-    app: AppHandle,
     target_user_id: String,
     state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<(), errors::CommandError> {

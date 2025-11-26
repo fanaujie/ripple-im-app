@@ -47,6 +47,37 @@
           </div>
         </div>
 
+        <!-- Stranger Message Banner -->
+        <div
+          v-if="isStrangerConversation"
+          class="bg-amber-50 border-b border-amber-200 px-6 py-3"
+        >
+          <div class="flex items-center justify-between">
+            <!-- Left: Message (text only, no icon) -->
+            <p class="text-sm text-amber-800">
+              This user is not in your friends list
+            </p>
+
+            <!-- Right: Action Buttons -->
+            <div class="flex items-center gap-3">
+              <button
+                @click="handleAddFriendFromBanner"
+                :disabled="bannerActionLoading"
+                class="px-4 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {{ bannerActionLoading === 'add' ? 'Adding...' : 'Add Friend' }}
+              </button>
+              <button
+                @click="handleBlockUserFromBanner"
+                :disabled="bannerActionLoading"
+                class="px-4 py-1.5 bg-white text-gray-700 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {{ bannerActionLoading === 'block' ? 'Blocking...' : 'Block' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Messages Area -->
         <div ref="messagesContainer" @scroll="handleScroll" class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           <!-- Loading indicator at top -->
@@ -84,8 +115,18 @@
           </div>
         </div>
 
-        <!-- Input Area -->
-        <div class="bg-white border-t border-gray-200 px-6 py-4">
+        <!-- Blocked User Notification (replaces input area) -->
+        <div
+          v-if="isBlockedConversation"
+          class="bg-red-50 border-t border-red-200 px-6 py-4"
+        >
+          <p class="text-sm text-red-800 text-center">
+            This user has been blocked
+          </p>
+        </div>
+
+        <!-- Input Area (only shown when user is not blocked) -->
+        <div v-else class="bg-white border-t border-gray-200 px-6 py-4">
           <div class="flex items-end gap-3">
             <textarea
               v-model="messageInput"
@@ -124,6 +165,7 @@ import { ref, computed, nextTick, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useChatDisplay } from '../composables/chat/useChatDisplay';
 import { useRelationsDisplay } from '../composables/useRelationsDisplay';
+import { useRelationActions } from '../composables/useRelationActions';
 import { useUserProfileDisplay } from '../composables/useUserProfileDisplay';
 import { getConversationDisplayName, getConversationAvatar } from '../types/chat';
 import type { ConversationDisplay } from '../types/chat';
@@ -146,6 +188,9 @@ const currentUserId = computed(() => userProfile.value?.userId || '');
 // Relations (for peer profiles)
 const { relationsMap } = useRelationsDisplay();
 
+// Relation actions (for banner actions)
+const { addFriend, blockUser } = useRelationActions();
+
 // Chat display (auto-initializes conversations via onMounted)
 const {
   conversations,
@@ -163,6 +208,9 @@ const selectedConversation = ref<ConversationDisplay | null>(null);
 const searchQuery = ref('');
 const messageInput = ref('');
 const messagesContainer = ref<HTMLElement | null>(null);
+
+// Stranger banner state
+const bannerActionLoading = ref<'add' | 'block' | null>(null);
 
 // Pagination state
 const isLoadingOlder = ref(false);
@@ -232,6 +280,60 @@ const selectedAvatarUrl = computed(() => {
   return defaultAvatarUrl;
 });
 
+// Determine if current conversation is with a stranger
+const isStrangerConversation = computed(() => {
+  // Get peer ID from selected conversation or target user
+  const peerId = selectedConversation.value?.peerId || targetUserId.value;
+
+  // Don't show banner if no peer or self-messaging
+  if (!peerId || peerId === currentUserId.value) {
+    return false;
+  }
+
+  // Look up peer in relations map
+  const peerRelation = relationsMap.value.get(peerId);
+
+  // If not in relations at all, it's a stranger
+  if (!peerRelation) {
+    return true;
+  }
+
+  // Check relation flags
+  const FRIEND_FLAG = 0b0001;
+  const BLOCKED_FLAG = 0b0010;
+
+  const isFriend = (peerRelation.relationFlags & FRIEND_FLAG) !== 0;
+  const isBlocked = (peerRelation.relationFlags & BLOCKED_FLAG) !== 0;
+
+  // Show banner only if not a friend and not blocked
+  return !isFriend && !isBlocked;
+});
+
+// Determine if current conversation is with a blocked user
+const isBlockedConversation = computed(() => {
+  // Get peer ID from selected conversation or target user
+  const peerId = selectedConversation.value?.peerId || targetUserId.value;
+
+  // Don't show banner if no peer or self-messaging
+  if (!peerId || peerId === currentUserId.value) {
+    return false;
+  }
+
+  // Look up peer in relations map
+  const peerRelation = relationsMap.value.get(peerId);
+
+  // If not in relations at all, not blocked
+  if (!peerRelation) {
+    return false;
+  }
+
+  // Check if user is blocked
+  const BLOCKED_FLAG = 0b0010;
+  const isBlocked = (peerRelation.relationFlags & BLOCKED_FLAG) !== 0;
+
+  return isBlocked;
+});
+
 // Select conversation
 async function selectConversation(conversation: ConversationDisplay) {
   selectedConversation.value = conversation;
@@ -292,6 +394,51 @@ async function handleSend() {
     scrollToBottom();
   } catch (error) {
     console.error('Failed to send message:', error);
+  }
+}
+
+// Handle add friend from banner
+async function handleAddFriendFromBanner() {
+  const peerId = selectedConversation.value?.peerId || targetUserId.value;
+
+  if (!peerId || bannerActionLoading.value) {
+    return;
+  }
+
+  bannerActionLoading.value = 'add';
+
+  try {
+    await addFriend(peerId);
+    console.log('Successfully added friend from chat banner:', peerId);
+    // Banner will auto-hide when relationsMap updates via event
+  } catch (error) {
+    console.error('Failed to add friend from banner:', error);
+    // TODO: Show error notification to user
+  } finally {
+    bannerActionLoading.value = null;
+  }
+}
+
+// Handle block user from banner
+async function handleBlockUserFromBanner() {
+  const peerId = selectedConversation.value?.peerId || targetUserId.value;
+  const displayName = selectedDisplayName.value;
+
+  if (!peerId || bannerActionLoading.value) {
+    return;
+  }
+
+  bannerActionLoading.value = 'block';
+
+  try {
+    await blockUser(peerId, displayName);
+    console.log('Successfully blocked user from chat banner:', peerId);
+    // Banner will auto-hide when relationsMap updates via event
+  } catch (error) {
+    console.error('Failed to block user from banner:', error);
+    // TODO: Show error notification to user
+  } finally {
+    bannerActionLoading.value = null;
   }
 }
 

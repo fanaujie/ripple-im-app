@@ -209,11 +209,6 @@ where
             .await
             .unwrap();
         let message_item: UIMessageItem = push_req.into();
-        println!(
-            "[IncrementalSyncManager] Emitting message-updated event for msg_id={}, conv_id={}",
-            message_item.message_id, message_item.conversation_id
-        );
-
         if let Err(e) = self.emitter.emit_message_updated(0, Some(message_item)) {
             eprintln!(
                 "[IncrementalSyncManager] Failed to emit message-updated event: {}",
@@ -223,7 +218,6 @@ where
 
         // Get last known conversation version
         let last_version = self.data_sync.get_conversation_version().await.unwrap();
-
         match self
             .data_sync
             .sync_conversations_incremental(last_version)
@@ -231,11 +225,6 @@ where
         {
             Ok(sync_data) => {
                 if sync_data.full_sync {
-                    println!(
-                        "[IncrementalSyncManager] Full conversation sync required, fetching all conversations"
-                    );
-
-                    // Clear frontend conversations first
                     if let Err(e) = self.emitter.emit_conversations_cleared() {
                         eprintln!(
                             "[IncrementalSyncManager] Failed to emit conversations cleared event: {}",
@@ -247,11 +236,6 @@ where
                         Ok(()) => {
                             let conversations =
                                 self.data_sync.get_conversations().await.unwrap_or_default();
-
-                            println!(
-                                "[IncrementalSyncManager] Full conversation sync completed: {} conversations",
-                                conversations.len()
-                            );
 
                             for conversation in conversations {
                                 let ui_conversation_item: UIConversationItem = conversation.into();
@@ -274,11 +258,6 @@ where
                         }
                     }
                 } else {
-                    println!(
-                        "[IncrementalSyncManager] Processing {} incremental conversation changes",
-                        sync_data.changes.len()
-                    );
-
                     // Get current user_id for unread count logic
                     let user_id = if let Ok(Some(profile)) = self.data_sync.get_profile().await {
                         profile.user_id.parse::<i64>().unwrap_or(0)
