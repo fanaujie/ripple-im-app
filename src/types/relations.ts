@@ -61,11 +61,11 @@ export interface RelationUser {
 }
 
 /**
- * RelationsData structure for storing friends and blocked users
+ * RelationsData structure for storing all relations
+ * Frontend will filter based on relationFlags
  */
 export interface RelationsData {
-  friends: RelationUser[];
-  blockedUsers: RelationUser[];
+  relations: RelationUser[];
 }
 
 /**

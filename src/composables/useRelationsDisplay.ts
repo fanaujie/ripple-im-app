@@ -5,8 +5,7 @@ import { useRelationEvents } from './useRelationEvents';
 import { useRelationsState } from './useRelationsState';
 
 interface UIRelationData {
-  friends: RelationUser[];
-  blocked_users: RelationUser[];
+  relations: RelationUser[];
 }
 
 /**
@@ -30,7 +29,7 @@ export function useRelationsDisplay() {
   const searchQuery = ref('');
 
   // Use state management composable
-  const { friends, blockedUsers, handleEvent, initialize } = useRelationsState();
+  const { friends, blockedUsers, relationsMap, handleEvent, initialize } = useRelationsState();
 
   // Set up event listener
   useRelationEvents(handleEvent);
@@ -47,9 +46,9 @@ export function useRelationsDisplay() {
       console.log('[useRelationsDisplay] Fetching initial data...');
       const data = await invoke<UIRelationData>('get_relations');
 
-      initialize(data.friends, data.blocked_users);
+      initialize(data.relations);
       console.log(
-        `[useRelationsDisplay] Loaded ${data.friends.length} friends, ${data.blocked_users.length} blocked`
+        `[useRelationsDisplay] Loaded ${data.relations.length} relations`
       );
     } catch (err) {
       console.error('[useRelationsDisplay] Failed to initialize relations:', err);
@@ -94,26 +93,6 @@ export function useRelationsDisplay() {
         user.nickName.toLowerCase().includes(query)
       );
     });
-  });
-
-  /**
-   * Map of userId to RelationUser for quick lookup
-   * Combines friends and blocked users
-   */
-  const relationsMap = computed(() => {
-    const map = new Map<string, RelationUser>();
-
-    // Add friends
-    for (const friend of friends.value) {
-      map.set(friend.userId, friend);
-    }
-
-    // Add blocked users
-    for (const blocked of blockedUsers.value) {
-      map.set(blocked.userId, blocked);
-    }
-
-    return map;
   });
 
   // Initialize on mount

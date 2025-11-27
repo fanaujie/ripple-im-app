@@ -10,7 +10,7 @@ pub mod relation_operation {
     pub const HIDE_BLOCK: u64 = 7;
     pub const UPDATE_FRIEND_NICK_NAME: u64 = 8;
     pub const UPDATE_FRIEND_AVATAR: u64 = 9;
-    pub const ADD_STRANGER: u64 = 10;
+    pub const BLOCK_STRANGER: u64 = 10;
     pub const UPDATE_FRIEND_INFO: u64 = 11;
 }
 

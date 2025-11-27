@@ -62,14 +62,14 @@
             <div class="flex items-center gap-3">
               <button
                 @click="handleAddFriendFromBanner"
-                :disabled="bannerActionLoading"
+                :disabled="!!bannerActionLoading"
                 class="px-4 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {{ bannerActionLoading === 'add' ? 'Adding...' : 'Add Friend' }}
               </button>
               <button
                 @click="handleBlockUserFromBanner"
-                :disabled="bannerActionLoading"
+                :disabled="!!bannerActionLoading"
                 class="px-4 py-1.5 bg-white text-gray-700 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {{ bannerActionLoading === 'block' ? 'Blocking...' : 'Block' }}
@@ -211,6 +211,7 @@ const messagesContainer = ref<HTMLElement | null>(null);
 
 // Stranger banner state
 const bannerActionLoading = ref<'add' | 'block' | null>(null);
+const bannerDismissedForUser = ref<string | null>(null); // Track which user's banner was dismissed
 
 // Pagination state
 const isLoadingOlder = ref(false);
@@ -287,6 +288,16 @@ const isStrangerConversation = computed(() => {
 
   // Don't show banner if no peer or self-messaging
   if (!peerId || peerId === currentUserId.value) {
+    return false;
+  }
+
+  // Hide banner if user has already taken action on this user's banner
+  if (bannerDismissedForUser.value === peerId) {
+    return false;
+  }
+
+  // Hide banner immediately when action is in progress (prevents flicker)
+  if (bannerActionLoading.value) {
     return false;
   }
 
@@ -405,14 +416,18 @@ async function handleAddFriendFromBanner() {
     return;
   }
 
+  // Dismiss banner immediately for this user (prevents flicker)
+  bannerDismissedForUser.value = peerId;
   bannerActionLoading.value = 'add';
 
   try {
     await addFriend(peerId);
     console.log('Successfully added friend from chat banner:', peerId);
-    // Banner will auto-hide when relationsMap updates via event
+    // Banner will stay hidden due to bannerDismissedForUser
   } catch (error) {
     console.error('Failed to add friend from banner:', error);
+    // On error, allow banner to show again
+    bannerDismissedForUser.value = null;
     // TODO: Show error notification to user
   } finally {
     bannerActionLoading.value = null;
@@ -428,14 +443,18 @@ async function handleBlockUserFromBanner() {
     return;
   }
 
+  // Dismiss banner immediately for this user (prevents flicker)
+  bannerDismissedForUser.value = peerId;
   bannerActionLoading.value = 'block';
 
   try {
     await blockUser(peerId, displayName);
     console.log('Successfully blocked user from chat banner:', peerId);
-    // Banner will auto-hide when relationsMap updates via event
+    // Banner will stay hidden due to bannerDismissedForUser
   } catch (error) {
     console.error('Failed to block user from banner:', error);
+    // On error, allow banner to show again
+    bannerDismissedForUser.value = null;
     // TODO: Show error notification to user
   } finally {
     bannerActionLoading.value = null;
@@ -574,6 +593,8 @@ watch(() => route.query.userId, (newUserId) => {
     targetUserId.value = null;
     setActiveConversation(null);
   }
+  // Reset banner dismissed state when switching conversations
+  bannerDismissedForUser.value = null;
 });
 
 // Handle initial load

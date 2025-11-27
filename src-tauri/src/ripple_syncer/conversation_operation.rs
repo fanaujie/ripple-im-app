@@ -9,8 +9,8 @@ pub mod conversation_operation {
 
 #[derive(Debug)]
 pub enum ConversationAction {
-    Upsert(StorageConversationData),
-
+    Create(StorageConversationData),
+    NewMessage(StorageConversationData),
     UpdateReadStatus {
         conversation_id: String,
         last_read_message_id: Option<i64>,

@@ -1,14 +1,36 @@
 use crate::ripple_api::api_response::{
-    CommonResponse, ConversationSyncData, ReadMessagesData, RelationUser, UserProfileData,
+    CommonResponse, ConversationChange, ConversationSyncData, ReadMessagesData, RelationChange,
+    RelationUser, UserProfileData,
 };
 use crate::ripple_api::RippleApi;
 use crate::ripple_syncer::conversation_operation::ConversationAction;
 use crate::ripple_syncer::relation_operation::RelationAction;
-use crate::ripple_syncer::ui_event::{BLOCKED_FLAG, FRIEND_FLAG, HIDDEN_FLAG};
 use crate::store_engine::store_engine::{
     RippleStorage, StorageConversationData, StorageMessageData, Token,
 };
 use uuid::Uuid;
+
+#[derive(Debug)]
+pub enum RelationSyncResult {
+    FullSync {
+        relations: Vec<RelationUser>,
+    },
+    IncrementalSync {
+        changes: Vec<(u64, String, Option<RelationUser>)>,
+    },
+    NoChange,
+}
+
+#[derive(Debug)]
+pub enum ConversationSyncResult {
+    FullSync {
+        conversations: Vec<StorageConversationData>,
+    },
+    IncrementalSync {
+        changes: Vec<(i32, String, Option<StorageConversationData>)>,
+    },
+    NoChange,
+}
 
 #[derive(Clone)]
 pub struct DataSyncManager<S: RippleStorage> {
@@ -30,14 +52,16 @@ impl<S: RippleStorage> DataSyncManager<S> {
             let new_id = Uuid::new_v4();
             self.store_engine.save_device_id(&new_id).await?;
         }
-        if !self.exists_profile().await? {
-            self.sync_user_profile().await?;
-        }
+        self.sync_user_profile().await?;
         if !self.exist_relations().await? {
             self.sync_all_relations().await?;
+        } else {
+            self.process_relations_sync(false).await?;
         }
         if !self.exist_conversations().await? {
             self.sync_all_conversations().await?;
+        } else {
+            self.process_conversations_sync(false).await?;
         }
         Ok(())
     }
@@ -148,34 +172,67 @@ impl<S: RippleStorage> DataSyncManager<S> {
         Ok(sync_response.data)
     }
 
+    pub async fn process_relations_sync(
+        &self,
+        need_result: bool,
+    ) -> anyhow::Result<Option<RelationSyncResult>> {
+        let last_version = self.get_relation_version().await?;
+        let sync_data = self.sync_relations_incremental(last_version).await?;
+        if sync_data.full_sync {
+            self.sync_all_relations().await?;
+            if need_result {
+                let relations = self.get_relations().await?;
+                return Ok(Some(RelationSyncResult::FullSync { relations }));
+            }
+            return Ok(None);
+        }
+        if sync_data.changes.is_empty() {
+            return Ok(if need_result {
+                Some(RelationSyncResult::NoChange)
+            } else {
+                None
+            });
+        }
+        if need_result {
+            let mut changes = Vec::new();
+            for change in sync_data.changes {
+                let operation = change.operation;
+                let user_id = change.user_id.clone();
+                let action = self.to_relation_storage_action(&change);
+
+                // One call to both write and read the updated data
+                let updated_user = self
+                    .store_engine
+                    .apply_relation_action(action, change.version.clone(), true)
+                    .await?;
+
+                changes.push((operation, user_id, updated_user));
+            }
+            Ok(Some(RelationSyncResult::IncrementalSync { changes }))
+        } else {
+            for change in sync_data.changes {
+                let action = self.to_relation_storage_action(&change);
+                // Don't need result, don't read data
+                self.store_engine
+                    .apply_relation_action(action, change.version.clone(), false)
+                    .await?;
+            }
+            Ok(None)
+        }
+    }
+
     pub async fn get_profile(&self) -> anyhow::Result<Option<UserProfileData>> {
         self.store_engine.get_user_profile().await
     }
 
-    pub async fn get_relations(&self) -> anyhow::Result<(Vec<RelationUser>, Vec<RelationUser>)> {
-        let mut friends: Vec<RelationUser> = Vec::new();
-        let mut blocked_users: Vec<RelationUser> = Vec::new();
-        let relations = self.store_engine.get_all_relations().await?;
-        for relation in relations {
-            if (relation.relation_flags & FRIEND_FLAG) != 0
-                && relation.relation_flags & BLOCKED_FLAG == 0
-            {
-                friends.push(relation);
-            } else if (relation.relation_flags & BLOCKED_FLAG) != 0
-                && (relation.relation_flags & HIDDEN_FLAG) == 0
-            {
-                blocked_users.push(relation);
-            }
-        }
-        Ok((friends, blocked_users))
+    pub async fn get_relations(&self) -> anyhow::Result<Vec<RelationUser>> {
+        self.store_engine.get_all_relations().await
     }
 
     pub async fn sync_all_conversations(&self) -> anyhow::Result<()> {
         let mut all_conversations = Vec::new();
         let mut next_page_token: Option<String> = None;
         let page_size = 50; // Default page size
-
-        // Get current version
         let conversation_version = self.ripple_api.get_conversation_version().await?;
         if conversation_version.code != 200 {
             anyhow::bail!(
@@ -184,12 +241,10 @@ impl<S: RippleStorage> DataSyncManager<S> {
                 conversation_version.message
             )
         }
-
         let last_version = match conversation_version.data.latest_version {
             Some(v) => v,
             None => return Ok(()),
         };
-
         // Paginate through all conversations
         loop {
             let conversations_response = self
@@ -236,6 +291,59 @@ impl<S: RippleStorage> DataSyncManager<S> {
         Ok(sync_response.data)
     }
 
+    pub async fn process_conversations_sync(
+        &self,
+        need_result: bool,
+    ) -> anyhow::Result<Option<ConversationSyncResult>> {
+        let last_version = self.get_conversation_version().await?;
+        let sync_data = self.sync_conversations_incremental(last_version).await?;
+        if sync_data.full_sync {
+            println!("[DataSyncManager] Full conversation sync required");
+            self.sync_all_conversations().await?;
+            if need_result {
+                let conversations = self.get_conversations().await?;
+                return Ok(Some(ConversationSyncResult::FullSync { conversations }));
+            }
+            return Ok(None);
+        }
+        if sync_data.changes.is_empty() {
+            return Ok(if need_result {
+                Some(ConversationSyncResult::NoChange)
+            } else {
+                None
+            });
+        }
+        let user_id = match self.get_profile().await? {
+            Some(profile) => profile.user_id.parse::<i64>().unwrap_or(0),
+            None => {
+                anyhow::bail!("Cannot get user_id for conversation sync");
+            }
+        };
+        if need_result {
+            let mut changes = Vec::new();
+            for change in sync_data.changes {
+                let operation = change.operation;
+                let conversation_id = change.conversation_id.clone();
+                let action = self.to_conversation_storage_action(&change);
+                let updated_conversation = self
+                    .store_engine
+                    .apply_conversation_action(action, change.version.clone(), user_id, true)
+                    .await?;
+
+                changes.push((operation, conversation_id, updated_conversation));
+            }
+            Ok(Some(ConversationSyncResult::IncrementalSync { changes }))
+        } else {
+            for change in sync_data.changes {
+                let action = self.to_conversation_storage_action(&change);
+                self.store_engine
+                    .apply_conversation_action(action, change.version.clone(), user_id, false)
+                    .await?;
+            }
+            Ok(None)
+        }
+    }
+
     pub async fn get_conversations(&self) -> anyhow::Result<Vec<StorageConversationData>> {
         self.store_engine.get_all_conversations().await
     }
@@ -248,9 +356,10 @@ impl<S: RippleStorage> DataSyncManager<S> {
         &self,
         action: RelationAction,
         version: String,
-    ) -> anyhow::Result<()> {
+        need_result: bool,
+    ) -> anyhow::Result<Option<RelationUser>> {
         self.store_engine
-            .apply_relation_action(action, version)
+            .apply_relation_action(action, version, need_result)
             .await
     }
 
@@ -267,9 +376,10 @@ impl<S: RippleStorage> DataSyncManager<S> {
         action: ConversationAction,
         version: String,
         user_id: i64,
-    ) -> anyhow::Result<()> {
+        need_result: bool,
+    ) -> anyhow::Result<Option<StorageConversationData>> {
         self.store_engine
-            .apply_conversation_action(action, version, user_id)
+            .apply_conversation_action(action, version, user_id, need_result)
             .await
     }
 
@@ -382,5 +492,84 @@ impl<S: RippleStorage> DataSyncManager<S> {
             .mark_last_read_message_id(conversation_id.clone(), message_id.clone())
             .await?;
         Ok(response)
+    }
+
+    fn to_relation_storage_action(&self, change: &RelationChange) -> RelationAction {
+        use crate::ripple_syncer::relation_operation::relation_operation;
+
+        match change.operation {
+            relation_operation::ADD_FRIEND => RelationAction::Upsert(change.into()),
+            relation_operation::UPDATE_FRIEND_REMARK_NAME => RelationAction::UpdateRemarkName {
+                user_id: change.user_id.clone(),
+                remark_name: change.remark_name.clone().unwrap_or_default(),
+            },
+            relation_operation::DELETE_FRIEND => RelationAction::Delete {
+                user_id: change.user_id.clone(),
+            },
+            relation_operation::ADD_BLOCK => RelationAction::UpdateFlags {
+                user_id: change.user_id.clone(),
+                flags: change.relation_flags,
+            },
+            relation_operation::DELETE_BLOCK => RelationAction::Delete {
+                user_id: change.user_id.clone(),
+            },
+            relation_operation::UNBLOCK_RESTORE_FRIEND => RelationAction::UpdateFlags {
+                user_id: change.user_id.clone(),
+                flags: change.relation_flags,
+            },
+            relation_operation::HIDE_BLOCK => RelationAction::UpdateFlags {
+                user_id: change.user_id.clone(),
+                flags: change.relation_flags,
+            },
+            relation_operation::UPDATE_FRIEND_NICK_NAME => RelationAction::UpdateNickName {
+                user_id: change.user_id.clone(),
+                nick_name: change.nick_name.clone().unwrap_or_default(),
+            },
+            relation_operation::UPDATE_FRIEND_AVATAR => RelationAction::UpdateAvatar {
+                user_id: change.user_id.clone(),
+                avatar: change.avatar.clone(),
+            },
+            relation_operation::BLOCK_STRANGER => RelationAction::Upsert(change.into()),
+            relation_operation::UPDATE_FRIEND_INFO => RelationAction::UpdateNickNameAvatar {
+                user_id: change.user_id.clone(),
+                nick_name: change.nick_name.clone().unwrap_or_default(),
+                avatar: change.avatar.clone(),
+            },
+            _ => {
+                eprintln!(
+                    "[DataSyncManager] Unknown relation operation: {}, using no-op",
+                    change.operation
+                );
+                RelationAction::UpdateAvatar {
+                    user_id: change.user_id.clone(),
+                    avatar: None,
+                }
+            }
+        }
+    }
+
+    fn to_conversation_storage_action(&self, change: &ConversationChange) -> ConversationAction {
+        use crate::ripple_syncer::conversation_operation::conversation_operation;
+
+        match change.operation {
+            conversation_operation::CREATE => ConversationAction::Create(change.into()),
+            conversation_operation::NEW_MESSAGE => ConversationAction::NewMessage(change.into()),
+            conversation_operation::READ_MESSAGE => ConversationAction::UpdateReadStatus {
+                conversation_id: change.conversation_id.clone(),
+                last_read_message_id: change
+                    .last_read_message_id
+                    .as_ref()
+                    .and_then(|id_str| id_str.parse::<i64>().ok()),
+            },
+            conversation_operation::DELETE => ConversationAction::Delete {
+                conversation_id: change.conversation_id.clone(),
+            },
+            _ => {
+                panic!(
+                    "[DataSyncManager] Unknown conversation operation: {}",
+                    change.operation
+                )
+            }
+        }
     }
 }

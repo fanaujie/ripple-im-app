@@ -259,19 +259,15 @@ pub async fn get_user_profile_by_id(
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
 pub struct UIRelationData {
-    pub friends: Vec<RelationUser>,
-    pub blocked_users: Vec<RelationUser>,
+    pub relations: Vec<RelationUser>,
 }
 
 #[tauri::command]
 pub async fn get_relations(
     sync_manager: State<'_, DataSyncManager<DefaultStoreEngine>>,
 ) -> Result<UIRelationData, errors::CommandError> {
-    let (cached_friends, cached_blocked) = sync_manager.get_relations().await?;
-    Ok(UIRelationData {
-        friends: cached_friends,
-        blocked_users: cached_blocked,
-    })
+    let relations = sync_manager.get_relations().await?;
+    Ok(UIRelationData { relations })
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

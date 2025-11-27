@@ -1,31 +1,31 @@
-import { ref, type Ref } from 'vue';
+import { ref, computed } from 'vue';
 import type { RelationUser, RelationUpdateEvent } from '../types/relations';
-import { RelationAction } from '../types/relations';
+import { RelationAction, shouldShowInFriendsList, shouldShowInBlockedList } from '../types/relations';
 
 /**
- * Composable for managing relations state (friends and blocked users)
+ * Composable for managing relations state using a Map
  *
- * Handles all relation update events and maintains reactive lists:
- * - friends: List of users with FRIEND flag (not blocked)
- * - blockedUsers: List of users with BLOCKED flag (not hidden)
+ * Architecture:
+ * - Stores all relations in a single Map<userId, RelationUser>
+ * - Provides computed properties for filtered views (friends, blockedUsers)
+ * - Simplifies event handling to basic Map operations (set/delete)
+ * - Achieves O(1) lookup performance
  *
  * @returns State and update handler
  */
 export function useRelationsState() {
-  const friends = ref<RelationUser[]>([]);
-  const blockedUsers = ref<RelationUser[]>([]);
+  const relationsMap = ref<Map<string, RelationUser>>(new Map());
 
   /**
    * Handle a relation update event from the backend
-   * Updates friends and/or blockedUsers lists based on the action type
+   * Simplified logic: just set or delete from the Map
    */
   function handleEvent(event: RelationUpdateEvent): void {
     const { action, userProfile: user } = event;
 
     // CLEAR action - reset everything
     if (action === RelationAction.CLEAR) {
-      friends.value = [];
-      blockedUsers.value = [];
+      relationsMap.value.clear();
       console.log('[useRelationsState] Cleared all relations');
       return;
     }
@@ -36,129 +36,65 @@ export function useRelationsState() {
       return;
     }
 
-    switch (action) {
-      case RelationAction.ADD_FRIEND:
-        // Add user to friends list, ensure not in blocked list
-        upsertUser(friends, user);
-        removeUser(blockedUsers, user.userId);
-        console.log('[useRelationsState] Added friend:', user.userId);
-        break;
+    // Determine if this is a removal action
+    const isRemoval = action === RelationAction.REMOVE_FRIEND ||
+                      action === RelationAction.REMOVE_BLOCK;
 
-      case RelationAction.REMOVE_FRIEND:
-        // Remove user from friends list
-        removeUser(friends, user.userId);
-        console.log('[useRelationsState] Removed friend:', user.userId);
-        break;
-
-      case RelationAction.ADD_BLOCK:
-        // Add user to blocked list (user was never a friend or already removed)
-        upsertUser(blockedUsers, user);
-        console.log('[useRelationsState] Added blocked user:', user.userId);
-        break;
-
-      case RelationAction.BLOCK_FRIEND:
-        // User was a friend, now blocked: move from friends to blockedUsers
-        removeUser(friends, user.userId);
-        upsertUser(blockedUsers, user);
-        console.log('[useRelationsState] Blocked friend:', user.userId);
-        break;
-
-      case RelationAction.UNBLOCK_TO_FRIEND:
-        // ⭐ Critical: Unblock a friend - restore to friends list
-        // User was a blocked friend, now unblocked with friendship restored
-        removeUser(blockedUsers, user.userId);
-        upsertUser(friends, user);
-        console.log('[useRelationsState] Unblocked to friend:', user.userId);
-        break;
-
-      case RelationAction.REMOVE_BLOCK:
-        // ⭐ Critical: Unblock a stranger - just remove from blocked list
-        // User was a blocked stranger (no friendship), simply remove from UI
-        removeUser(blockedUsers, user.userId);
-        console.log('[useRelationsState] Removed blocked user:', user.userId);
-        break;
-
-      case RelationAction.UPDATE_FRIEND:
-        // Update user info (remarkName, nickName, avatar) in both lists
-        // User might be in either friends or blocked list
-        updateUser(friends, user);
-        updateUser(blockedUsers, user);
-        console.log('[useRelationsState] Updated user:', user.userId);
-        break;
-
-      default:
-        console.warn('[useRelationsState] Unknown action:', action);
+    if (isRemoval) {
+      // Remove from map
+      relationsMap.value.delete(user.userId);
+      console.log('[useRelationsState] Removed user:', user.userId, 'action:', action);
+    } else {
+      // Add or update in map (all other actions)
+      relationsMap.value.set(user.userId, user);
+      console.log('[useRelationsState] Updated user:', user.userId, 'action:', action, 'flags:', user.relationFlags);
     }
   }
 
   /**
    * Initialize state with data (called on component mount)
    */
-  function initialize(friendsList: RelationUser[], blockedList: RelationUser[]): void {
-    friends.value = friendsList;
-    blockedUsers.value = blockedList;
-    console.log(
-      `[useRelationsState] Initialized: ${friendsList.length} friends, ${blockedList.length} blocked`
-    );
+  function initialize(relations: RelationUser[]): void {
+    relationsMap.value.clear();
+    for (const user of relations) {
+      relationsMap.value.set(user.userId, user);
+    }
+    console.log(`[useRelationsState] Initialized: ${relations.length} relations`);
   }
 
+  /**
+   * Computed: Friends list (filtered from relationsMap)
+   * Shows users with FRIEND flag and not blocked
+   */
+  const friends = computed(() => {
+    const result: RelationUser[] = [];
+    for (const user of relationsMap.value.values()) {
+      if (shouldShowInFriendsList(user)) {
+        result.push(user);
+      }
+    }
+    return result;
+  });
+
+  /**
+   * Computed: Blocked users list (filtered from relationsMap)
+   * Shows users with BLOCKED flag and not hidden
+   */
+  const blockedUsers = computed(() => {
+    const result: RelationUser[] = [];
+    for (const user of relationsMap.value.values()) {
+      if (shouldShowInBlockedList(user)) {
+        result.push(user);
+      }
+    }
+    return result;
+  });
+
   return {
+    relationsMap,
     friends,
     blockedUsers,
     handleEvent,
     initialize,
   };
-}
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Upsert (insert or update) a user in a list
- * If user exists, update it; otherwise, add it
- *
- * Note: Uses splice() instead of direct assignment to ensure Vue reactivity
- */
-function upsertUser(listRef: Ref<RelationUser[]>, user: RelationUser): void {
-  const list = listRef.value;
-  const index = list.findIndex((u) => u.userId === user.userId);
-
-  if (index >= 0) {
-    // Update existing user using splice for Vue reactivity
-    // Direct assignment (list[index] = user) doesn't reliably trigger updates
-    list.splice(index, 1, user);
-  } else {
-    // Add new user
-    list.push(user);
-  }
-}
-
-/**
- * Remove a user from a list by userId
- */
-function removeUser(listRef: Ref<RelationUser[]>, userId: string): void {
-  const list = listRef.value;
-  const index = list.findIndex((u) => u.userId === userId);
-
-  if (index >= 0) {
-    list.splice(index, 1);
-  }
-}
-
-/**
- * Update an existing user in a list
- * Only updates if user exists in the list
- *
- * Note: Uses splice() instead of direct assignment to ensure Vue reactivity
- */
-function updateUser(listRef: Ref<RelationUser[]>, user: RelationUser): void {
-  const list = listRef.value;
-  const index = list.findIndex((u) => u.userId === user.userId);
-
-  if (index >= 0) {
-    // Update existing user using splice for Vue reactivity
-    // Direct assignment (list[index] = user) doesn't reliably trigger updates
-    list.splice(index, 1, user);
-  }
 }

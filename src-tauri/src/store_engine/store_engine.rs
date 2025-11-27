@@ -3,10 +3,9 @@ use crate::ripple_api::api_response::{
 };
 use crate::ripple_syncer::conversation_operation::ConversationAction;
 use crate::ripple_syncer::relation_operation::RelationAction;
-use ripple_proto::ripple_pb::{
-    push_message_request, send_message_req, PushMessageRequest, SendMessageReq,
-};
+use ripple_proto::ripple_pb::{push_message_request, send_message_req, PushMessageRequest};
 use std::collections::{BTreeMap, HashMap};
+use std::option::Option;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -176,7 +175,8 @@ pub trait StoreEngine: Sync + Clone + 'static {
         &self,
         action: RelationAction,
         version: String,
-    ) -> anyhow::Result<()>;
+        need_result: bool,
+    ) -> anyhow::Result<Option<RelationUser>>;
 
     async fn get_relation(&self, user_id: &str) -> anyhow::Result<Option<RelationUser>>;
     async fn get_all_relations(&self) -> anyhow::Result<Vec<RelationUser>>;
@@ -193,7 +193,8 @@ pub trait StoreEngine: Sync + Clone + 'static {
         action: ConversationAction,
         version: String,
         user_id: i64,
-    ) -> anyhow::Result<()>;
+        need_result: bool,
+    ) -> anyhow::Result<Option<StorageConversationData>>;
     async fn get_conversation(
         &self,
         conversation_id: &str,
@@ -332,58 +333,98 @@ impl RippleStorage for MemoryStore {
         &self,
         action: RelationAction,
         version: String,
-    ) -> anyhow::Result<()> {
+        need_result: bool,
+    ) -> anyhow::Result<Option<RelationUser>> {
         let mut inner = self.inner.lock().await;
-
+        inner.relation_version = Some(version);
         match action {
             RelationAction::Upsert(relation) => {
-                inner.relations.insert(relation.user_id.clone(), relation);
+                inner
+                    .relations
+                    .insert(relation.user_id.clone(), relation.clone());
+                if need_result {
+                    Ok(Some(relation))
+                } else {
+                    Ok(None)
+                }
             }
-
             RelationAction::UpdateRemarkName {
                 user_id,
                 remark_name,
-            } => {
-                if let Some(relation) = inner.relations.get_mut(&user_id) {
+            } => match inner.relations.get_mut(&user_id) {
+                Some(relation) => {
                     relation.remark_name = remark_name;
+                    if need_result {
+                        Ok(Some(relation.clone()))
+                    } else {
+                        Ok(None)
+                    }
                 }
-            }
+                None => Ok(None),
+            },
 
             RelationAction::UpdateNickName { user_id, nick_name } => {
-                if let Some(relation) = inner.relations.get_mut(&user_id) {
-                    relation.nick_name = nick_name;
+                match inner.relations.get_mut(&user_id) {
+                    Some(relation) => {
+                        relation.nick_name = nick_name;
+                        if need_result {
+                            Ok(Some(relation.clone()))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    None => Ok(None),
                 }
             }
 
             RelationAction::UpdateAvatar { user_id, avatar } => {
-                if let Some(relation) = inner.relations.get_mut(&user_id) {
-                    relation.avatar = avatar;
+                match inner.relations.get_mut(&user_id) {
+                    Some(relation) => {
+                        relation.avatar = avatar;
+                        if need_result {
+                            Ok(Some(relation.clone()))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    None => Ok(None),
                 }
             }
 
             RelationAction::UpdateFlags { user_id, flags } => {
-                if let Some(relation) = inner.relations.get_mut(&user_id) {
-                    relation.relation_flags = flags;
+                match inner.relations.get_mut(&user_id) {
+                    Some(relation) => {
+                        relation.relation_flags = flags;
+                        if need_result {
+                            Ok(Some(relation.clone()))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    None => Ok(None),
                 }
-                // If user doesn't exist, this operation is ignored
-                // The caller should ensure complete user data is provided via Upsert
             }
             RelationAction::Delete { user_id } => {
                 inner.relations.remove(&user_id);
+                Ok(None)
             }
             RelationAction::UpdateNickNameAvatar {
                 user_id,
                 nick_name,
                 avatar,
-            } => {
-                if let Some(relation) = inner.relations.get_mut(&user_id) {
+            } => match inner.relations.get_mut(&user_id) {
+                Some(relation) => {
                     relation.nick_name = nick_name;
                     relation.avatar = avatar;
+                    if need_result {
+                        Ok(Some(relation.clone()))
+                    } else {
+                        Ok(None)
+                    }
                 }
-            }
+                None => Ok(None),
+            },
         }
-        inner.relation_version = Some(version);
-        Ok(())
     }
 
     async fn get_relation(&self, user_id: &str) -> anyhow::Result<Option<RelationUser>> {
@@ -428,50 +469,60 @@ impl RippleStorage for MemoryStore {
         action: ConversationAction,
         version: String,
         user_id: i64,
-    ) -> anyhow::Result<()> {
+        need_result: bool,
+    ) -> anyhow::Result<Option<StorageConversationData>> {
         let mut inner = self.inner.lock().await;
-
+        inner.conversation_version = Some(version);
         match action {
-            ConversationAction::Upsert(conversation) => {
-                if let Some(conv) = inner.conversations.get_mut(&conversation.conversation_id) {
-                    conv.unread_count += 1;
-                }
+            ConversationAction::Create(conversation) => {
                 inner
                     .conversations
-                    .insert(conversation.conversation_id.clone(), conversation);
+                    .insert(conversation.conversation_id.clone(), conversation.clone());
+                if need_result {
+                    Ok(Some(conversation))
+                } else {
+                    Ok(None)
+                }
+            }
+            ConversationAction::NewMessage(conversation) => {
+                match inner.conversations.get_mut(&conversation.conversation_id) {
+                    Some(conv) => {
+                        conv.unread_count += 1;
+                        conv.last_message_id = conversation.last_message_id;
+                        conv.last_message = conversation.last_message;
+                        conv.last_message_timestamp = conversation.last_message_timestamp;
+                        if need_result {
+                            Ok(Some(conv.clone()))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    None => Ok(None),
+                }
             }
             ConversationAction::UpdateReadStatus {
                 conversation_id,
                 last_read_message_id,
             } => {
                 let last_read_id = last_read_message_id.unwrap_or(0);
-                let new_unread_count = if let Some(messages) = inner.messages.get(&conversation_id)
-                {
-                    messages
-                        .iter()
-                        .filter(|(msg_id, msg)| {
-                            msg.receiver_id == user_id && **msg_id > last_read_id
-                        })
-                        .count() as i32
-                } else {
-                    0
-                };
-                if let Some(conversation) = inner.conversations.get_mut(&conversation_id) {
-                    conversation.last_read_message_id = last_read_message_id;
-                    conversation.unread_count = new_unread_count;
-                } else {
-                    eprintln!(
-                        "[StoreEngine] Warning: Attempted to update read status for non-existent conversation: {}",
-                        conversation_id
-                    );
+                match inner.conversations.get_mut(&conversation_id) {
+                    Some(conv) => {
+                        conv.last_read_message_id = Some(last_read_id);
+                        conv.unread_count = 0;
+                        if need_result {
+                            Ok(Some(conv.clone()))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    None => Ok(None),
                 }
             }
             ConversationAction::Delete { conversation_id } => {
                 inner.conversations.remove(&conversation_id);
+                Ok(None)
             }
         }
-        inner.conversation_version = Some(version);
-        Ok(())
     }
 
     async fn get_conversation(
