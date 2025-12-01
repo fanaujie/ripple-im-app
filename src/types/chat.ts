@@ -5,12 +5,18 @@ import type { RelationUser } from './relations';
  * These action codes match the Rust backend's conversation_event_action constants
  */
 export enum ConversationAction {
-  /** New message received - upserts conversation (update if exists, insert if new) */
-  NEW_MESSAGE = 0,
-  /** Update conversation information */
-  UPDATE = 1,
+  /** Create new conversation */
+  CREATE = 0,
+  /** New message received - upserts conversation */
+  NEW_MESSAGE = 1,
+  /** Mark messages as read */
+  READ_MESSAGE = 2,
+  /** Update conversation name */
+  UPDATE_NAME = 3,
+  /** Update conversation avatar */
+  UPDATE_AVATAR = 4,
   /** Delete a conversation */
-  DELETE = 2,
+  DELETE = 5,
   /** Clear all conversations (used during full sync) */
   CLEAR = -1,
 }
@@ -51,6 +57,10 @@ export interface ConversationItem {
   lastReadMessageId?: string;
   /** Number of unread messages (calculated based on lastReadMessageId) */
   unreadCount: number;
+  /** Conversation display name (for groups or custom names) */
+  name?: string;
+  /** Conversation avatar URL (for groups or custom avatars) */
+  avatar?: string;
 }
 
 /**
@@ -157,30 +167,22 @@ export function isGroupChat(conversation: ConversationItem): boolean {
 
 /**
  * Get conversation display name
- * For one-on-one chat, use peer's display name
- * For group chat, use group name (TODO: implement when group support is added)
+ * Backend provides name directly - use it or fallback to conversationId
  */
 export function getConversationDisplayName(
   conversation: ConversationDisplay
 ): string {
-  if (conversation.peerProfile) {
-    return conversation.peerProfile.remarkName || conversation.peerProfile.nickName;
-  }
-  return conversation.conversationId;
+  return conversation.name || conversation.conversationId;
 }
 
 /**
  * Get conversation avatar URL
- * For one-on-one chat, use peer's avatar
- * For group chat, use group avatar (TODO: implement when group support is added)
+ * Backend provides avatar directly
  */
 export function getConversationAvatar(
   conversation: ConversationDisplay
 ): string | undefined {
-  if (conversation.peerProfile) {
-    return conversation.peerProfile.avatar;
-  }
-  return undefined;
+  return conversation.avatar;
 }
 
 /**

@@ -130,8 +130,6 @@ pub struct RelationVersionResponse {
     pub data: RelationVersionData,
 }
 
-// ==================== Conversation Types ====================
-
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ConversationItem {
     #[serde(rename = "conversationId")]
@@ -150,6 +148,10 @@ pub struct ConversationItem {
     pub last_read_message_id: Option<String>,
     #[serde(rename = "unreadCount")]
     pub unread_count: i64,
+    #[serde(rename = "name")]
+    pub name: String,
+    #[serde(rename = "avatar")]
+    pub avatar: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -186,6 +188,10 @@ pub struct ConversationChange {
     pub last_message_timestamp: Option<i64>,
     #[serde(rename = "lastReadMessageId")]
     pub last_read_message_id: Option<String>,
+    #[serde(rename = "name")]
+    pub name: Option<String>,
+    #[serde(rename = "avatar")]
+    pub avatar: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

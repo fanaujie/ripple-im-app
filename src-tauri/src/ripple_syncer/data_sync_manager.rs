@@ -3,7 +3,7 @@ use crate::ripple_api::api_response::{
     RelationUser, UserProfileData,
 };
 use crate::ripple_api::RippleApi;
-use crate::ripple_syncer::conversation_operation::ConversationAction;
+use crate::ripple_syncer::conversation_operation::ConversationStorageAction;
 use crate::ripple_syncer::relation_operation::RelationAction;
 use crate::store_engine::store_engine::{
     RippleStorage, StorageConversationData, StorageMessageData, Token,
@@ -298,7 +298,6 @@ impl<S: RippleStorage> DataSyncManager<S> {
         let last_version = self.get_conversation_version().await?;
         let sync_data = self.sync_conversations_incremental(last_version).await?;
         if sync_data.full_sync {
-            println!("[DataSyncManager] Full conversation sync required");
             self.sync_all_conversations().await?;
             if need_result {
                 let conversations = self.get_conversations().await?;
@@ -373,7 +372,7 @@ impl<S: RippleStorage> DataSyncManager<S> {
 
     pub async fn apply_conversation_action(
         &self,
-        action: ConversationAction,
+        action: ConversationStorageAction,
         version: String,
         user_id: i64,
         need_result: bool,
@@ -530,7 +529,7 @@ impl<S: RippleStorage> DataSyncManager<S> {
                 avatar: change.avatar.clone(),
             },
             relation_operation::BLOCK_STRANGER => RelationAction::Upsert(change.into()),
-            relation_operation::UPDATE_FRIEND_INFO => RelationAction::UpdateNickNameAvatar {
+            relation_operation::SYNC_FRIEND_INFO => RelationAction::UpdateNickNameAvatar {
                 user_id: change.user_id.clone(),
                 nick_name: change.nick_name.clone().unwrap_or_default(),
                 avatar: change.avatar.clone(),
@@ -548,20 +547,39 @@ impl<S: RippleStorage> DataSyncManager<S> {
         }
     }
 
-    fn to_conversation_storage_action(&self, change: &ConversationChange) -> ConversationAction {
+    fn to_conversation_storage_action(
+        &self,
+        change: &ConversationChange,
+    ) -> ConversationStorageAction {
         use crate::ripple_syncer::conversation_operation::conversation_operation;
 
         match change.operation {
-            conversation_operation::CREATE => ConversationAction::Create(change.into()),
-            conversation_operation::NEW_MESSAGE => ConversationAction::NewMessage(change.into()),
-            conversation_operation::READ_MESSAGE => ConversationAction::UpdateReadStatus {
+            conversation_operation::CREATE_CONVERSATION => {
+                ConversationStorageAction::Create(change.into())
+            }
+            conversation_operation::NEW_MESSAGE => {
+                ConversationStorageAction::NewMessage(change.into())
+            }
+            conversation_operation::READ_MESSAGE => ConversationStorageAction::UpdateReadStatus {
                 conversation_id: change.conversation_id.clone(),
                 last_read_message_id: change
                     .last_read_message_id
                     .as_ref()
                     .and_then(|id_str| id_str.parse::<i64>().ok()),
             },
-            conversation_operation::DELETE => ConversationAction::Delete {
+            conversation_operation::UPDATE_CONVERSATION_NAME => {
+                ConversationStorageAction::UpdateName {
+                    conversation_id: change.conversation_id.clone(),
+                    name: change.name.clone().unwrap_or_default(),
+                }
+            }
+            conversation_operation::UPDATE_CONVERSATION_AVATAR => {
+                ConversationStorageAction::UpdateAvatar {
+                    conversation_id: change.conversation_id.clone(),
+                    avatar: change.avatar.clone().unwrap_or_default(),
+                }
+            }
+            conversation_operation::DELETE_CONVERSATION => ConversationStorageAction::Delete {
                 conversation_id: change.conversation_id.clone(),
             },
             _ => {

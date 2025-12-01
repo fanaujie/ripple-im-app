@@ -136,14 +136,15 @@ where
                     let image_data = image_data.clone();
                     let hash = Sha256::digest(&image_data);
                     let hex_hash = base16ct::lower::encode_string(&hash);
-                    let filename = filename.clone();
-                    let mime = mime.clone();
+                    let clone_filename = filename.clone();
+                    let clone_mime = mime.clone();
                     async move {
                         let part = reqwest::multipart::Part::bytes(image_data)
-                            .file_name(filename)
-                            .mime_str(mime.to_string().as_str())?;
+                            .file_name(clone_filename.clone())
+                            .mime_str(clone_mime.to_string().as_str())?;
                         let form = reqwest::multipart::Form::new()
                             .text("hash", hex_hash)
+                            .text("originalFilename", clone_filename)
                             .part("avatar", part);
                         self.reqwest_client
                             .put(&self.api_paths.upload_avatar)

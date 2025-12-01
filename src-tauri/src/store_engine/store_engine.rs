@@ -1,7 +1,7 @@
 use crate::ripple_api::api_response::{
     ConversationChange, ConversationItem, MessageItem, RelationUser, UserProfileData,
 };
-use crate::ripple_syncer::conversation_operation::ConversationAction;
+use crate::ripple_syncer::conversation_operation::ConversationStorageAction;
 use crate::ripple_syncer::relation_operation::RelationAction;
 use ripple_proto::ripple_pb::{push_message_request, send_message_req, PushMessageRequest};
 use std::collections::{BTreeMap, HashMap};
@@ -24,6 +24,8 @@ pub struct StorageConversationData {
     pub last_message_timestamp: i64,
     pub last_read_message_id: Option<i64>,
     pub unread_count: i32,
+    pub name: String,
+    pub avatar: Option<String>,
 }
 
 impl From<ConversationItem> for StorageConversationData {
@@ -40,6 +42,8 @@ impl From<ConversationItem> for StorageConversationData {
                 .as_ref()
                 .and_then(|id| id.parse().ok()),
             unread_count: item.unread_count as i32,
+            name: item.name,
+            avatar: item.avatar,
         }
     }
 }
@@ -62,6 +66,8 @@ impl From<&ConversationChange> for StorageConversationData {
                 .as_ref()
                 .and_then(|id| id.parse().ok()),
             unread_count: 0,
+            name: change.name.clone().unwrap_or_default(),
+            avatar: change.avatar.clone(),
         }
     }
 }
@@ -190,7 +196,7 @@ pub trait StoreEngine: Sync + Clone + 'static {
     ) -> anyhow::Result<()>;
     async fn apply_conversation_action(
         &self,
-        action: ConversationAction,
+        action: ConversationStorageAction,
         version: String,
         user_id: i64,
         need_result: bool,
@@ -466,7 +472,7 @@ impl RippleStorage for MemoryStore {
 
     async fn apply_conversation_action(
         &self,
-        action: ConversationAction,
+        action: ConversationStorageAction,
         version: String,
         user_id: i64,
         need_result: bool,
@@ -474,7 +480,7 @@ impl RippleStorage for MemoryStore {
         let mut inner = self.inner.lock().await;
         inner.conversation_version = Some(version);
         match action {
-            ConversationAction::Create(conversation) => {
+            ConversationStorageAction::Create(conversation) => {
                 inner
                     .conversations
                     .insert(conversation.conversation_id.clone(), conversation.clone());
@@ -484,7 +490,7 @@ impl RippleStorage for MemoryStore {
                     Ok(None)
                 }
             }
-            ConversationAction::NewMessage(conversation) => {
+            ConversationStorageAction::NewMessage(conversation) => {
                 match inner.conversations.get_mut(&conversation.conversation_id) {
                     Some(conv) => {
                         conv.unread_count += 1;
@@ -500,7 +506,7 @@ impl RippleStorage for MemoryStore {
                     None => Ok(None),
                 }
             }
-            ConversationAction::UpdateReadStatus {
+            ConversationStorageAction::UpdateReadStatus {
                 conversation_id,
                 last_read_message_id,
             } => {
@@ -518,7 +524,35 @@ impl RippleStorage for MemoryStore {
                     None => Ok(None),
                 }
             }
-            ConversationAction::Delete { conversation_id } => {
+            ConversationStorageAction::UpdateName {
+                conversation_id,
+                name,
+            } => match inner.conversations.get_mut(&conversation_id) {
+                Some(conv) => {
+                    conv.name = name;
+                    if need_result {
+                        Ok(Some(conv.clone()))
+                    } else {
+                        Ok(None)
+                    }
+                }
+                None => Ok(None),
+            },
+            ConversationStorageAction::UpdateAvatar {
+                conversation_id,
+                avatar,
+            } => match inner.conversations.get_mut(&conversation_id) {
+                Some(conv) => {
+                    conv.avatar = Some(avatar);
+                    if need_result {
+                        Ok(Some(conv.clone()))
+                    } else {
+                        Ok(None)
+                    }
+                }
+                None => Ok(None),
+            },
+            ConversationStorageAction::Delete { conversation_id } => {
                 inner.conversations.remove(&conversation_id);
                 Ok(None)
             }

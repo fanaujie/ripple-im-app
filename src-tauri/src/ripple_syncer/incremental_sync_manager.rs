@@ -4,10 +4,11 @@ use crate::ripple_syncer::conversation_operation::{
 };
 use crate::ripple_syncer::data_sync_manager::{ConversationSyncResult, RelationSyncResult};
 use crate::ripple_syncer::event_emitter::{EventEmitter, UIConversationItem, UIMessageItem};
-use crate::ripple_syncer::relation_operation::{relation_event_action, relation_operation};
+use crate::ripple_syncer::relation_operation::{relation_operation, relation_ui_event_action};
 use crate::ripple_syncer::sync_handler::RippleSyncHandler;
 use crate::ripple_syncer::ui_event::{BLOCKED_FLAG, FRIEND_FLAG, HIDDEN_FLAG};
 use crate::ripple_syncer::DataSyncManager;
+use crate::ripple_ws::sync_aware_ws_message_handler::PushNotification;
 use crate::store_engine::store_engine::{RippleStorage, StorageMessageData};
 use ripple_proto::ripple_pb::PushMessageRequest;
 
@@ -36,10 +37,10 @@ where
     S: RippleStorage,
     E: EventEmitter,
 {
-    async fn handle_self_info_update_sync(&self, push_req: PushMessageRequest) {
+    async fn handle_self_info_update_sync(&self, push_notification: PushNotification) {
         println!(
             "[IncrementalSyncManager] Handling self info update sync for user ID: {}",
-            push_req.send_user_id
+            push_notification.send_user_id
         );
         match self.data_sync.sync_user_profile().await {
             Ok(()) => {
@@ -71,7 +72,11 @@ where
         }
     }
 
-    async fn handle_relations_update_sync(&self, push_req: PushMessageRequest) {
+    async fn handle_relations_update_sync(&self, push_notification: PushNotification) {
+        println!(
+            "[IncrementalSyncManager] Handling relation update sync for user ID: {}",
+            push_notification.send_user_id
+        );
         match self.data_sync.process_relations_sync(true).await {
             Ok(Some(RelationSyncResult::FullSync { relations })) => {
                 if let Err(e) = self.emitter.emit_relations_cleared() {
@@ -84,11 +89,11 @@ where
                     let action = if (user.relation_flags & FRIEND_FLAG) != 0
                         && (user.relation_flags & BLOCKED_FLAG) == 0
                     {
-                        relation_event_action::ADD_FRIEND
+                        relation_ui_event_action::ADD_FRIEND
                     } else if (user.relation_flags & BLOCKED_FLAG) != 0
                         && (user.relation_flags & HIDDEN_FLAG) == 0
                     {
-                        relation_event_action::ADD_BLOCK
+                        relation_ui_event_action::ADD_BLOCK
                     } else {
                         // Skip users that don't match display criteria
                         continue;
@@ -136,13 +141,31 @@ where
         }
     }
 
+    async fn handle_conversation_update_sync(&self, push_notification: PushNotification) {
+        println!(
+            "[IncrementalSyncManager] Handling conversation update sync for user ID: {}",
+            push_notification.send_user_id
+        );
+        self.handle_conversation_sync().await;
+    }
+
     async fn handle_message_update_sync(&self, push_req: PushMessageRequest) {
         let storage_message: StorageMessageData = (&push_req).into();
         self.data_sync.store_message(storage_message).await.unwrap();
+        self.handle_conversation_sync().await;
         let message_item: UIMessageItem = push_req.into();
         if let Err(e) = self.emitter.emit_message_updated(0, Some(message_item)) {
             eprintln!("[IncrementalSyncManager] Failed to emit message: {}", e);
         }
+    }
+}
+
+impl<S, E> IncrementalSyncManager<S, E>
+where
+    E: EventEmitter,
+    S: RippleStorage,
+{
+    async fn handle_conversation_sync(&self) {
         match self.data_sync.process_conversations_sync(true).await {
             Ok(Some(ConversationSyncResult::FullSync { conversations })) => {
                 if let Err(e) = self.emitter.emit_conversations_cleared() {
@@ -169,7 +192,6 @@ where
                     if let Some(conversation) = conversation_data {
                         let ui_item: UIConversationItem = conversation.into();
                         let action = map_conversation_operation_to_ui_action(operation);
-
                         if let Err(e) = self
                             .emitter
                             .emit_conversation_updated(action, Some(ui_item))
@@ -207,29 +229,29 @@ fn map_relation_operation_to_ui_action(operation: u64, relation_flags: i32) -> i
     let is_friend = (relation_flags & FRIEND_FLAG) != 0;
 
     match operation {
-        relation_operation::ADD_FRIEND => relation_event_action::ADD_FRIEND,
-        relation_operation::DELETE_FRIEND => relation_event_action::REMOVE_FRIEND,
+        relation_operation::ADD_FRIEND => relation_ui_event_action::ADD_FRIEND,
+        relation_operation::DELETE_FRIEND => relation_ui_event_action::REMOVE_FRIEND,
         relation_operation::ADD_BLOCK => {
             if is_friend {
-                relation_event_action::BLOCK_FRIEND
+                relation_ui_event_action::BLOCK_FRIEND
             } else {
-                relation_event_action::ADD_BLOCK
+                relation_ui_event_action::ADD_BLOCK
             }
         }
         relation_operation::DELETE_BLOCK => {
             if is_friend {
-                relation_event_action::UNBLOCK_TO_FRIEND
+                relation_ui_event_action::UNBLOCK_TO_FRIEND
             } else {
-                relation_event_action::REMOVE_BLOCK
+                relation_ui_event_action::REMOVE_BLOCK
             }
         }
-        relation_operation::UNBLOCK_RESTORE_FRIEND => relation_event_action::UNBLOCK_TO_FRIEND,
-        relation_operation::HIDE_BLOCK => relation_event_action::REMOVE_BLOCK,
+        relation_operation::UNBLOCK_RESTORE_FRIEND => relation_ui_event_action::UNBLOCK_TO_FRIEND,
+        relation_operation::HIDE_BLOCK => relation_ui_event_action::REMOVE_BLOCK,
         relation_operation::UPDATE_FRIEND_REMARK_NAME
         | relation_operation::UPDATE_FRIEND_NICK_NAME
         | relation_operation::UPDATE_FRIEND_AVATAR
-        | relation_operation::UPDATE_FRIEND_INFO => relation_event_action::UPDATE_FRIEND,
-        relation_operation::BLOCK_STRANGER => relation_event_action::ADD_BLOCK,
+        | relation_operation::SYNC_FRIEND_INFO => relation_ui_event_action::UPDATE_FRIEND,
+        relation_operation::BLOCK_STRANGER => relation_ui_event_action::ADD_BLOCK,
         _ => panic!(
             "[IncrementalSyncManager] Error: Unknown relation operation: {}, defaulting to UPDATE_FRIEND",
             operation
@@ -239,10 +261,14 @@ fn map_relation_operation_to_ui_action(operation: u64, relation_flags: i32) -> i
 
 fn map_conversation_operation_to_ui_action(operation: i32) -> i32 {
     match operation {
-        conversation_operation::CREATE => conversation_event_action::CREATE,
+        conversation_operation::CREATE_CONVERSATION => conversation_event_action::CREATE,
         conversation_operation::NEW_MESSAGE => conversation_event_action::NEW_MESSAGE,
         conversation_operation::READ_MESSAGE => conversation_event_action::READ_MESSAGE,
-        conversation_operation::DELETE => conversation_event_action::DELETE,
+        conversation_operation::UPDATE_CONVERSATION_NAME => conversation_event_action::UPDATE_NAME,
+        conversation_operation::UPDATE_CONVERSATION_AVATAR => {
+            conversation_event_action::UPDATE_AVATAR
+        }
+        conversation_operation::DELETE_CONVERSATION => conversation_event_action::DELETE,
         _ => {
             panic!(
                 "[IncrementalSyncManager] Error: Unknown conversation operation: {}, defaulting to NEW_MESSAGE",

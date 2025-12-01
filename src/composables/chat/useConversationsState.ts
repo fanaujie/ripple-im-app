@@ -39,14 +39,42 @@ export function useConversationsState(relations: Ref<Map<string, RelationUser>>)
     }
 
     switch (action) {
-      case ConversationAction.NEW_MESSAGE:
+      case ConversationAction.CREATE:
+        // CREATE includes full data - do complete upsert
         updateConversation(conversation);
-        console.log('[useConversationsState] Upserted conversation:', conversation.conversationId);
+        console.log('[useConversationsState] Created conversation:', conversation.conversationId);
         break;
 
-      case ConversationAction.UPDATE:
-        updateConversation(conversation);
-        console.log('[useConversationsState] Updated conversation:', conversation.conversationId);
+      case ConversationAction.NEW_MESSAGE:
+        // NEW_MESSAGE only includes message fields - update specific fields to preserve name/avatar
+        updateConversationField(conversation.conversationId, {
+          lastMessageId: conversation.lastMessageId,
+          lastMessage: conversation.lastMessage,
+          lastMessageTimestamp: conversation.lastMessageTimestamp,
+          unreadCount: conversation.unreadCount,
+        });
+        console.log('[useConversationsState] Updated conversation with new message:', conversation.conversationId);
+        break;
+
+      case ConversationAction.READ_MESSAGE:
+        // READ_MESSAGE only includes read-related fields
+        updateConversationField(conversation.conversationId, {
+          lastReadMessageId: conversation.lastReadMessageId,
+          unreadCount: conversation.unreadCount,
+        });
+        console.log('[useConversationsState] Updated read status:', conversation.conversationId);
+        break;
+
+      case ConversationAction.UPDATE_NAME:
+        // Update only the name field
+        updateConversationField(conversation.conversationId, { name: conversation.name });
+        console.log('[useConversationsState] Updated name:', conversation.conversationId);
+        break;
+
+      case ConversationAction.UPDATE_AVATAR:
+        // Update only the avatar field
+        updateConversationField(conversation.conversationId, { avatar: conversation.avatar });
+        console.log('[useConversationsState] Updated avatar:', conversation.conversationId);
         break;
 
       case ConversationAction.DELETE:
@@ -110,6 +138,33 @@ export function useConversationsState(relations: Ref<Map<string, RelationUser>>)
 
     if (index >= 0) {
       list.splice(index, 1);
+    }
+  }
+
+  /**
+   * Update specific fields of a conversation (for granular updates like name/avatar)
+   */
+  function updateConversationField(
+    conversationId: string,
+    updates: Partial<ConversationItem>
+  ): void {
+    const list = conversations.value;
+    const index = list.findIndex((c) => c.conversationId === conversationId);
+
+    if (index >= 0) {
+      const updated = {
+        ...list[index],
+        ...updates,
+      };
+      list.splice(index, 1, updated);
+    } else {
+      // This should not happen - conversation should exist after CREATE event
+      console.error(
+        '[useConversationsState] Cannot update conversation fields - conversation not found:',
+        conversationId,
+        'Updates:',
+        updates
+      );
     }
   }
 

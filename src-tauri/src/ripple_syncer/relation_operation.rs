@@ -11,7 +11,7 @@ pub mod relation_operation {
     pub const UPDATE_FRIEND_NICK_NAME: u64 = 8;
     pub const UPDATE_FRIEND_AVATAR: u64 = 9;
     pub const BLOCK_STRANGER: u64 = 10;
-    pub const UPDATE_FRIEND_INFO: u64 = 11;
+    pub const SYNC_FRIEND_INFO: u64 = 11;
 }
 
 #[derive(Debug)]
@@ -43,7 +43,7 @@ pub enum RelationAction {
     },
 }
 
-pub mod relation_event_action {
+pub mod relation_ui_event_action {
     pub const ADD_FRIEND: i32 = 0;
     pub const REMOVE_FRIEND: i32 = 1;
     pub const UPDATE_FRIEND: i32 = 2;

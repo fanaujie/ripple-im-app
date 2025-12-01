@@ -21,6 +21,10 @@ pub struct UIConversationItem {
     pub last_read_message_id: Option<String>,
     #[serde(rename = "unreadCount")]
     pub unread_count: i32,
+    #[serde(rename = "name")]
+    pub name: Option<String>,
+    #[serde(rename = "avatar")]
+    pub avatar: Option<String>,
 }
 
 impl From<StorageConversationData> for UIConversationItem {
@@ -39,6 +43,8 @@ impl From<StorageConversationData> for UIConversationItem {
                 .as_ref()
                 .and_then(|id| Some(id.to_string())),
             unread_count: item.unread_count,
+            name: Some(item.name),
+            avatar: item.avatar,
         }
     }
 }
@@ -54,6 +60,8 @@ impl From<ConversationChange> for UIConversationItem {
             last_message_timestamp: item.last_message_timestamp,
             last_read_message_id: item.last_read_message_id,
             unread_count: 0,
+            name: item.name,
+            avatar: item.avatar,
         }
     }
 }
