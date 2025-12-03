@@ -212,7 +212,6 @@ where
     ) -> anyhow::Result<()> {
         if message.is_binary() {
             if let Ok(ws) = ripple_pb::WsMessage::decode(message.into_data()) {
-                println!("Received WsMessage: {:?}", ws);
                 match ws.message_type {
                     Some(MessageType::PushMessageRequest(push_message)) => {
                         for msg_type in &push_message.push_message_type {

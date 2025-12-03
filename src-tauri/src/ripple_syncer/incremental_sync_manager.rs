@@ -117,7 +117,7 @@ where
                             user_id: user_id.clone(),
                             nick_name: String::new(),
                             avatar: None,
-                            remark_name: String::new(),
+                            remark_name: None,
                             relation_flags: 0,
                         })
                     });

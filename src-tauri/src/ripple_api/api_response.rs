@@ -54,7 +54,7 @@ pub struct RelationUser {
     pub nick_name: String,
     pub avatar: Option<String>,
     #[serde(rename = "remarkName")]
-    pub remark_name: String,
+    pub remark_name: Option<String>,
     #[serde(rename = "relationFlags")]
     pub relation_flags: i32,
 }
@@ -65,7 +65,7 @@ impl From<&RelationChange> for RelationUser {
             user_id: change.user_id.clone(),
             nick_name: change.nick_name.clone().unwrap_or_default(),
             avatar: change.avatar.clone(),
-            remark_name: change.remark_name.clone().unwrap_or_default(),
+            remark_name: change.remark_name.clone(),
             relation_flags: change.relation_flags,
         }
     }

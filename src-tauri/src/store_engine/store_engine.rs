@@ -359,7 +359,7 @@ impl RippleStorage for MemoryStore {
                 remark_name,
             } => match inner.relations.get_mut(&user_id) {
                 Some(relation) => {
-                    relation.remark_name = remark_name;
+                    relation.remark_name = Some(remark_name);
                     if need_result {
                         Ok(Some(relation.clone()))
                     } else {
