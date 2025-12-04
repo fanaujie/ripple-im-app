@@ -4,7 +4,9 @@ use crate::ripple_api::api_response::{
 use crate::ripple_syncer::conversation_operation::ConversationStorageAction;
 use crate::ripple_syncer::relation_operation::RelationAction;
 use ripple_proto::ripple_pb::{push_message_request, send_message_req, PushMessageRequest};
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
+use std::future::Future;
 use std::option::Option;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -12,6 +14,23 @@ use uuid::Uuid;
 pub struct Token {
     pub access_token: String,
     pub refresh_token: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct StorageUserProfileData {
+    pub user_id: i64,
+    pub nick_name: String,
+    pub avatar: Option<String>,
+}
+
+impl From<UserProfileData> for StorageUserProfileData {
+    fn from(profile: UserProfileData) -> Self {
+        StorageUserProfileData {
+            user_id: profile.user_id.parse().unwrap(),
+            nick_name: profile.nick_name,
+            avatar: profile.avatar,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -54,13 +73,9 @@ impl From<&ConversationChange> for StorageConversationData {
             conversation_id: change.conversation_id.clone(),
             peer_id: change.peer_id.clone(),
             group_id: change.group_id.clone(),
-            last_message_id: change
-                .last_message_id
-                .as_ref()
-                .and_then(|id| id.parse().ok())
-                .unwrap_or(0),
-            last_message: change.last_message.as_ref().cloned().unwrap_or_default(),
-            last_message_timestamp: change.last_message_timestamp.unwrap_or(0),
+            last_message_id: 0,
+            last_message: String::default(),
+            last_message_timestamp: 0,
             last_read_message_id: change
                 .last_read_message_id
                 .as_ref()
@@ -161,7 +176,6 @@ impl From<StorageMessageData> for MessageItem {
 #[trait_variant::make(RippleStorage: Send)]
 pub trait StoreEngine: Sync + Clone + 'static {
     async fn exists_token(&self) -> anyhow::Result<bool>;
-    async fn exists_profile(&self) -> anyhow::Result<bool>;
     async fn exist_relations(&self) -> anyhow::Result<bool>;
     async fn exist_conversations(&self) -> anyhow::Result<bool>;
 
@@ -169,8 +183,8 @@ pub trait StoreEngine: Sync + Clone + 'static {
     async fn save_device_id(&self, device_id: &Uuid) -> anyhow::Result<()>;
     async fn get_token(&self) -> anyhow::Result<Option<Token>>;
     async fn save_token(&self, access_token: &str, refresh_token: &str) -> anyhow::Result<()>;
-    async fn get_user_profile(&self) -> anyhow::Result<Option<UserProfileData>>;
-    async fn save_user_profile(&self, profile: &UserProfileData) -> anyhow::Result<()>;
+    async fn get_user_profile(&self) -> anyhow::Result<Option<StorageUserProfileData>>;
+    async fn save_user_profile(&self, profile: StorageUserProfileData) -> anyhow::Result<()>;
 
     async fn apply_relation_all(
         &self,
@@ -201,14 +215,11 @@ pub trait StoreEngine: Sync + Clone + 'static {
         user_id: i64,
         need_result: bool,
     ) -> anyhow::Result<Option<StorageConversationData>>;
-    async fn get_conversation(
-        &self,
-        conversation_id: &str,
-    ) -> anyhow::Result<Option<StorageConversationData>>;
+    async fn conversation_exists(&self, conversation_id: &str) -> anyhow::Result<bool>;
     async fn get_all_conversations(&self) -> anyhow::Result<Vec<StorageConversationData>>;
     async fn get_conversation_version(&self) -> anyhow::Result<Option<String>>;
     async fn clear_all_conversations(&self) -> anyhow::Result<()>;
-    async fn store_message(&self, message: StorageMessageData) -> anyhow::Result<()>;
+    async fn store_message(&self, message: StorageMessageData) -> anyhow::Result<i32>;
     async fn get_latest_messages(
         &self,
         conversation_id: &str,
@@ -231,7 +242,7 @@ struct InnerStore {
     access_token: Option<String>,
     refresh_token: Option<String>,
     uuid: Option<Uuid>,
-    user_profile: Option<UserProfileData>,
+    user_profile: Option<StorageUserProfileData>,
     relations: HashMap<String, RelationUser>,
     relation_version: Option<String>,
     conversations: HashMap<String, StorageConversationData>,
@@ -261,11 +272,6 @@ impl RippleStorage for MemoryStore {
     async fn exists_token(&self) -> anyhow::Result<bool> {
         // always return false for in-memory store
         Ok(false)
-    }
-
-    async fn exists_profile(&self) -> anyhow::Result<bool> {
-        let inner = self.inner.lock().await;
-        Ok(inner.user_profile.is_some())
     }
 
     async fn exist_relations(&self) -> anyhow::Result<bool> {
@@ -311,14 +317,14 @@ impl RippleStorage for MemoryStore {
         Ok(())
     }
 
-    async fn get_user_profile(&self) -> anyhow::Result<Option<UserProfileData>> {
+    async fn get_user_profile(&self) -> anyhow::Result<Option<StorageUserProfileData>> {
         let inner = self.inner.lock().await;
         Ok(inner.user_profile.clone())
     }
 
-    async fn save_user_profile(&self, profile: &UserProfileData) -> anyhow::Result<()> {
+    async fn save_user_profile(&self, profile: StorageUserProfileData) -> anyhow::Result<()> {
         let mut inner = self.inner.lock().await;
-        inner.user_profile = Some(profile.clone());
+        inner.user_profile = Some(profile);
         Ok(())
     }
 
@@ -490,22 +496,6 @@ impl RippleStorage for MemoryStore {
                     Ok(None)
                 }
             }
-            ConversationStorageAction::NewMessage(conversation) => {
-                match inner.conversations.get_mut(&conversation.conversation_id) {
-                    Some(conv) => {
-                        conv.unread_count += 1;
-                        conv.last_message_id = conversation.last_message_id;
-                        conv.last_message = conversation.last_message;
-                        conv.last_message_timestamp = conversation.last_message_timestamp;
-                        if need_result {
-                            Ok(Some(conv.clone()))
-                        } else {
-                            Ok(None)
-                        }
-                    }
-                    None => Ok(None),
-                }
-            }
             ConversationStorageAction::UpdateReadStatus {
                 conversation_id,
                 last_read_message_id,
@@ -552,19 +542,27 @@ impl RippleStorage for MemoryStore {
                 }
                 None => Ok(None),
             },
-            ConversationStorageAction::Delete { conversation_id } => {
-                inner.conversations.remove(&conversation_id);
-                Ok(None)
-            }
+            ConversationStorageAction::UpdateNameAvatar {
+                conversation_id,
+                name,
+                avatar,
+            } => match inner.conversations.get_mut(&conversation_id) {
+                Some(conv) => {
+                    conv.name = name;
+                    conv.avatar = Some(avatar);
+                    if need_result {
+                        Ok(Some(conv.clone()))
+                    } else {
+                        Ok(None)
+                    }
+                }
+                None => Ok(None),
+            },
         }
     }
-
-    async fn get_conversation(
-        &self,
-        conversation_id: &str,
-    ) -> anyhow::Result<Option<StorageConversationData>> {
+    async fn conversation_exists(&self, conversation_id: &str) -> anyhow::Result<bool> {
         let inner = self.inner.lock().await;
-        Ok(inner.conversations.get(conversation_id).cloned())
+        Ok(inner.conversations.contains_key(conversation_id))
     }
 
     async fn get_all_conversations(&self) -> anyhow::Result<Vec<StorageConversationData>> {
@@ -583,15 +581,35 @@ impl RippleStorage for MemoryStore {
         Ok(())
     }
 
-    async fn store_message(&self, message: StorageMessageData) -> anyhow::Result<()> {
+    async fn store_message(&self, message: StorageMessageData) -> anyhow::Result<i32> {
         let mut inner = self.inner.lock().await;
         let conversation_messages = inner
             .messages
             .entry(message.conversation_id.clone())
             .or_insert_with(BTreeMap::new);
-
-        conversation_messages.insert(message.message_id, message.clone());
-        Ok(())
+        // Insert the message and check if it was already present
+        // If the message is new, update unread count accordingly
+        // Return the updated unread count
+        match conversation_messages.insert(message.message_id, message.clone()) {
+            Some(_) => match inner.conversations.get(&message.conversation_id) {
+                Some(con) => Ok(con.unread_count),
+                None => anyhow::bail!("conversation {} not found", message.conversation_id),
+            },
+            None => {
+                let profile_user_id = inner.user_profile.as_ref().unwrap().user_id;
+                match inner.conversations.get_mut(&message.conversation_id) {
+                    Some(conv) => {
+                        if profile_user_id == message.receiver_id {
+                            conv.unread_count += 1;
+                            Ok(conv.unread_count)
+                        } else {
+                            Ok(0)
+                        }
+                    }
+                    None => anyhow::bail!("conversation {} not found", message.conversation_id),
+                }
+            }
+        }
     }
 
     async fn get_latest_messages(

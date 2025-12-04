@@ -96,22 +96,28 @@
             :key="message.messageId"
             :class="[
               'flex items-end gap-2',
-              message.senderId === currentUserId ? 'justify-end flex-row-reverse' : 'justify-start',
+              message.senderId === currentUserId ? 'justify-end' : 'justify-start',
             ]"
           >
-            <div
-              :class="[
-                'max-w-md px-4 py-2 rounded-2xl',
-                message.senderId === currentUserId
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-white text-gray-900',
-              ]"
-            >
-              <div>{{ message.textContent }}</div>
-            </div>
-            <div class="text-xs text-gray-400 pb-1 whitespace-nowrap">
-              {{ formatMessageTime(message.sendTimestamp) }}
-            </div>
+            <!-- Sent messages: timestamp on left, bubble on right -->
+            <template v-if="message.senderId === currentUserId">
+              <div class="text-xs text-gray-400 pb-1 whitespace-nowrap">
+                {{ formatMessageTime(message.sendTimestamp) }}
+              </div>
+              <div class="max-w-md px-4 py-2 rounded-2xl bg-blue-500 text-white">
+                <div>{{ message.textContent }}</div>
+              </div>
+            </template>
+
+            <!-- Received messages: bubble on left, timestamp on right -->
+            <template v-else>
+              <div class="max-w-md px-4 py-2 rounded-2xl bg-white text-gray-900">
+                <div>{{ message.textContent }}</div>
+              </div>
+              <div class="text-xs text-gray-400 pb-1 whitespace-nowrap">
+                {{ formatMessageTime(message.sendTimestamp) }}
+              </div>
+            </template>
           </div>
         </div>
 
@@ -517,29 +523,38 @@ async function loadOlderMessagesWithScroll() {
   }
 }
 
-// Smart auto-scroll: only scroll to bottom when user is already near the bottom
-watch(currentMessages, async (newMessages, oldMessages) => {
-  // Only auto-scroll if messages were added (not removed or cleared)
-  if (!oldMessages || newMessages.length <= oldMessages.length) {
-    return;
-  }
+// Auto-scroll to bottom when new messages arrive
+watch(
+  currentMessages,
+  async (newMessages, oldMessages) => {
+    console.log('[ChatView] Messages changed:', {
+      oldLength: oldMessages?.length,
+      newLength: newMessages.length,
+    });
 
-  await nextTick();
+    // Skip if no messages
+    if (!newMessages || newMessages.length === 0) {
+      console.log('[ChatView] Skip auto-scroll: no messages');
+      return;
+    }
 
-  const container = messagesContainer.value;
-  if (!container) return;
+    await nextTick();
 
-  // Check if user is near bottom (within 100px of the bottom)
-  const scrollTop = container.scrollTop;
-  const scrollHeight = container.scrollHeight;
-  const clientHeight = container.clientHeight;
-  const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
+    const container = messagesContainer.value;
+    if (!container) {
+      console.log('[ChatView] Skip auto-scroll: container not found');
+      return;
+    }
 
-  // Auto-scroll only if user is already near the bottom
-  if (distanceFromBottom < 100) {
-    scrollToBottom();
-  }
-});
+    console.log('[ChatView] Auto-scrolling to bottom...');
+    // Use requestAnimationFrame to ensure DOM is fully rendered before scrolling
+    requestAnimationFrame(() => {
+      scrollToBottom();
+      console.log('[ChatView] Scrolled to bottom');
+    });
+  },
+  { deep: true }
+);
 
 function onImageError(event: Event) {
   const img = event.target as HTMLImageElement;

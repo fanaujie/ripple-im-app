@@ -1,6 +1,6 @@
-use crate::ripple_api::api_response::RelationUser;
+use crate::ripple_api::api_response::{RelationUser, UserProfileData};
 use crate::ripple_syncer::conversation_operation::{
-    conversation_event_action, conversation_operation,
+    conversation_operation, conversation_ui_event_action,
 };
 use crate::ripple_syncer::data_sync_manager::{ConversationSyncResult, RelationSyncResult};
 use crate::ripple_syncer::event_emitter::{EventEmitter, UIConversationItem, UIMessageItem};
@@ -49,7 +49,7 @@ where
                         "[IncrementalSyncManager] User avatar URL: {}",
                         profile_data.avatar.as_ref().unwrap()
                     );
-                    if let Err(e) = self.emitter.emit_user_profile_updated(profile_data) {
+                    if let Err(e) = self.emitter.emit_user_profile_updated(profile_data.into()) {
                         eprintln!(
                             "[IncrementalSyncManager] Failed to emit user profile updated event: {}",
                             e
@@ -151,8 +151,45 @@ where
 
     async fn handle_message_update_sync(&self, push_req: PushMessageRequest) {
         let storage_message: StorageMessageData = (&push_req).into();
-        self.data_sync.store_message(storage_message).await.unwrap();
-        self.handle_conversation_sync().await;
+        match self
+            .data_sync
+            .conversation_exists(storage_message.conversation_id.as_str())
+            .await
+        {
+            Ok(exists) => {
+                if !exists {
+                    println!(
+                        "[IncrementalSyncManager] Conversation does not exist for ID: {}, sync new conversation",
+                        storage_message.conversation_id
+                    );
+                    self.handle_conversation_sync().await;
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "[IncrementalSyncManager] Failed to check conversation existence: {}",
+                    e
+                );
+            }
+        }
+        let last_message_id = storage_message.message_id.to_string();
+        let last_message_timestamp = storage_message.send_timestamp;
+        let last_read_message = storage_message.text_content.clone();
+        let unread_count = self.data_sync.store_message(storage_message).await.unwrap();
+        let mut ui_conversation: UIConversationItem = (&push_req).into();
+        ui_conversation.unread_count = unread_count;
+        ui_conversation.last_message_id = Some(last_message_id);
+        ui_conversation.last_message_timestamp = Some(last_message_timestamp);
+        ui_conversation.last_message = last_read_message;
+        if let Err(e) = self.emitter.emit_conversation_updated(
+            conversation_ui_event_action::NEW_MESSAGE,
+            Some(ui_conversation),
+        ) {
+            eprintln!(
+                "[IncrementalSyncManager] Failed to emit conversation update: {}",
+                e
+            );
+        }
         let message_item: UIMessageItem = push_req.into();
         if let Err(e) = self.emitter.emit_message_updated(0, Some(message_item)) {
             eprintln!("[IncrementalSyncManager] Failed to emit message: {}", e);
@@ -176,10 +213,10 @@ where
                 }
                 for conversation in conversations {
                     let ui_item: UIConversationItem = conversation.into();
-                    if let Err(e) = self
-                        .emitter
-                        .emit_conversation_updated(conversation_event_action::CREATE, Some(ui_item))
-                    {
+                    if let Err(e) = self.emitter.emit_conversation_updated(
+                        conversation_ui_event_action::CREATE,
+                        Some(ui_item),
+                    ) {
                         eprintln!(
                             "[IncrementalSyncManager] Failed to emit conversation: {}",
                             e
@@ -188,7 +225,7 @@ where
                 }
             }
             Ok(Some(ConversationSyncResult::IncrementalSync { changes })) => {
-                for (operation, conversation_id, conversation_data) in changes {
+                for (conversation_id, operation, conversation_data) in changes {
                     if let Some(conversation) = conversation_data {
                         let ui_item: UIConversationItem = conversation.into();
                         let action = map_conversation_operation_to_ui_action(operation);
@@ -261,14 +298,17 @@ fn map_relation_operation_to_ui_action(operation: u64, relation_flags: i32) -> i
 
 fn map_conversation_operation_to_ui_action(operation: i32) -> i32 {
     match operation {
-        conversation_operation::CREATE_CONVERSATION => conversation_event_action::CREATE,
-        conversation_operation::NEW_MESSAGE => conversation_event_action::NEW_MESSAGE,
-        conversation_operation::READ_MESSAGE => conversation_event_action::READ_MESSAGE,
-        conversation_operation::UPDATE_CONVERSATION_NAME => conversation_event_action::UPDATE_NAME,
-        conversation_operation::UPDATE_CONVERSATION_AVATAR => {
-            conversation_event_action::UPDATE_AVATAR
+        conversation_operation::CREATE_CONVERSATION => conversation_ui_event_action::CREATE,
+        conversation_operation::READ_MESSAGE => conversation_ui_event_action::READ_MESSAGE,
+        conversation_operation::UPDATE_CONVERSATION_NAME => {
+            conversation_ui_event_action::UPDATE_NAME
         }
-        conversation_operation::DELETE_CONVERSATION => conversation_event_action::DELETE,
+        conversation_operation::UPDATE_CONVERSATION_AVATAR => {
+            conversation_ui_event_action::UPDATE_AVATAR
+        }
+        conversation_operation::UPDATE_CONVERSATION_NAME_AVATAR => {
+            conversation_ui_event_action::UPDATE_NAME_AVATAR
+        }
         _ => {
             panic!(
                 "[IncrementalSyncManager] Error: Unknown conversation operation: {}, defaulting to NEW_MESSAGE",

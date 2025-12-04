@@ -1,3 +1,4 @@
+use crate::store_engine::store_engine::StorageUserProfileData;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -7,6 +8,16 @@ pub struct UserProfileData {
     #[serde(rename = "nickName")]
     pub nick_name: String,
     pub avatar: Option<String>,
+}
+
+impl From<StorageUserProfileData> for UserProfileData {
+    fn from(data: StorageUserProfileData) -> Self {
+        UserProfileData {
+            user_id: data.user_id.to_string(),
+            nick_name: data.nick_name,
+            avatar: data.avatar,
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -180,12 +191,6 @@ pub struct ConversationChange {
     pub peer_id: Option<String>,
     #[serde(rename = "groupId")]
     pub group_id: Option<String>,
-    #[serde(rename = "lastMessageId")]
-    pub last_message_id: Option<String>,
-    #[serde(rename = "lastMessage")]
-    pub last_message: Option<String>,
-    #[serde(rename = "lastMessageTimestamp")]
-    pub last_message_timestamp: Option<i64>,
     #[serde(rename = "lastReadMessageId")]
     pub last_read_message_id: Option<String>,
     #[serde(rename = "name")]

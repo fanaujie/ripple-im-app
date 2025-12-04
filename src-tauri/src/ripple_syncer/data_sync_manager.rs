@@ -1,12 +1,12 @@
 use crate::ripple_api::api_response::{
     CommonResponse, ConversationChange, ConversationSyncData, ReadMessagesData, RelationChange,
-    RelationUser, UserProfileData,
+    RelationUser,
 };
 use crate::ripple_api::RippleApi;
 use crate::ripple_syncer::conversation_operation::ConversationStorageAction;
 use crate::ripple_syncer::relation_operation::RelationAction;
 use crate::store_engine::store_engine::{
-    RippleStorage, StorageConversationData, StorageMessageData, Token,
+    RippleStorage, StorageConversationData, StorageMessageData, StorageUserProfileData, Token,
 };
 use uuid::Uuid;
 
@@ -27,7 +27,7 @@ pub enum ConversationSyncResult {
         conversations: Vec<StorageConversationData>,
     },
     IncrementalSync {
-        changes: Vec<(i32, String, Option<StorageConversationData>)>,
+        changes: Vec<(String, i32, Option<StorageConversationData>)>,
     },
     NoChange,
 }
@@ -86,7 +86,10 @@ impl<S: RippleStorage> DataSyncManager<S> {
     }
 
     pub async fn exists_profile(&self) -> anyhow::Result<bool> {
-        self.store_engine.exists_profile().await
+        match self.store_engine.get_user_profile().await? {
+            Some(_) => Ok(true),
+            None => Ok(false),
+        }
     }
     pub async fn exist_relations(&self) -> anyhow::Result<bool> {
         self.store_engine.exist_relations().await
@@ -107,7 +110,7 @@ impl<S: RippleStorage> DataSyncManager<S> {
         }
 
         self.store_engine
-            .save_user_profile(&profile_response.data)
+            .save_user_profile(profile_response.data.into())
             .await?;
 
         Ok(())
@@ -221,7 +224,7 @@ impl<S: RippleStorage> DataSyncManager<S> {
         }
     }
 
-    pub async fn get_profile(&self) -> anyhow::Result<Option<UserProfileData>> {
+    pub async fn get_profile(&self) -> anyhow::Result<Option<StorageUserProfileData>> {
         self.store_engine.get_user_profile().await
     }
 
@@ -313,7 +316,7 @@ impl<S: RippleStorage> DataSyncManager<S> {
             });
         }
         let user_id = match self.get_profile().await? {
-            Some(profile) => profile.user_id.parse::<i64>().unwrap_or(0),
+            Some(profile) => profile.user_id,
             None => {
                 anyhow::bail!("Cannot get user_id for conversation sync");
             }
@@ -329,7 +332,7 @@ impl<S: RippleStorage> DataSyncManager<S> {
                     .apply_conversation_action(action, change.version.clone(), user_id, true)
                     .await?;
 
-                changes.push((operation, conversation_id, updated_conversation));
+                changes.push((conversation_id, operation, updated_conversation));
             }
             Ok(Some(ConversationSyncResult::IncrementalSync { changes }))
         } else {
@@ -382,11 +385,8 @@ impl<S: RippleStorage> DataSyncManager<S> {
             .await
     }
 
-    pub async fn get_conversation(
-        &self,
-        conversation_id: &str,
-    ) -> anyhow::Result<Option<StorageConversationData>> {
-        self.store_engine.get_conversation(conversation_id).await
+    pub async fn conversation_exists(&self, conversation_id: &str) -> anyhow::Result<bool> {
+        self.store_engine.conversation_exists(conversation_id).await
     }
 
     pub async fn read_latest_messages(
@@ -478,9 +478,10 @@ impl<S: RippleStorage> DataSyncManager<S> {
         Ok(ReadMessagesData { messages })
     }
 
-    pub async fn store_message(&self, message: StorageMessageData) -> anyhow::Result<()> {
+    pub async fn store_message(&self, message: StorageMessageData) -> anyhow::Result<i32> {
         self.store_engine.store_message(message).await
     }
+
     pub async fn mark_last_read_message_id(
         &self,
         conversation_id: String,
@@ -557,9 +558,6 @@ impl<S: RippleStorage> DataSyncManager<S> {
             conversation_operation::CREATE_CONVERSATION => {
                 ConversationStorageAction::Create(change.into())
             }
-            conversation_operation::NEW_MESSAGE => {
-                ConversationStorageAction::NewMessage(change.into())
-            }
             conversation_operation::READ_MESSAGE => ConversationStorageAction::UpdateReadStatus {
                 conversation_id: change.conversation_id.clone(),
                 last_read_message_id: change
@@ -579,9 +577,13 @@ impl<S: RippleStorage> DataSyncManager<S> {
                     avatar: change.avatar.clone().unwrap_or_default(),
                 }
             }
-            conversation_operation::DELETE_CONVERSATION => ConversationStorageAction::Delete {
-                conversation_id: change.conversation_id.clone(),
-            },
+            conversation_operation::UPDATE_CONVERSATION_NAME_AVATAR => {
+                ConversationStorageAction::UpdateNameAvatar {
+                    conversation_id: change.conversation_id.clone(),
+                    name: change.name.clone().unwrap_or_default(),
+                    avatar: change.avatar.clone().unwrap_or_default(),
+                }
+            }
             _ => {
                 panic!(
                     "[DataSyncManager] Unknown conversation operation: {}",

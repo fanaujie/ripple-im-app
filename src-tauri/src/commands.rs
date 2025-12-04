@@ -63,13 +63,11 @@ pub fn open_auth_url(app: AppHandle) -> Result<(), errors::CommandError> {
 pub async fn get_user_profile(
     data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
 ) -> Result<UserProfileData, errors::CommandError> {
-    data_sync.get_profile().await?.ok_or_else(|| {
-        errors::CommandError::RippleAPIError(
-            "get_user_profile".to_string(),
-            500,
-            "User profile not initialized. Please call preload_global_data first.".to_string(),
-        )
-    })
+    let profile = data_sync.get_profile().await?;
+    match profile {
+        Some(profile_data) => Ok(profile_data.into()),
+        None => Err(anyhow!("User profile not found").into()),
+    }
 }
 
 #[tauri::command]

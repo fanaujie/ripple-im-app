@@ -77,6 +77,15 @@ export function useConversationsState(relations: Ref<Map<string, RelationUser>>)
         console.log('[useConversationsState] Updated avatar:', conversation.conversationId);
         break;
 
+      case ConversationAction.UPDATE_NAME_AVATAR:
+        // Update both name and avatar fields atomically
+        updateConversationField(conversation.conversationId, {
+          name: conversation.name,
+          avatar: conversation.avatar
+        });
+        console.log('[useConversationsState] Updated name and avatar:', conversation.conversationId);
+        break;
+
       case ConversationAction.DELETE:
         removeConversation(conversation.conversationId);
         console.log('[useConversationsState] Deleted conversation:', conversation.conversationId);

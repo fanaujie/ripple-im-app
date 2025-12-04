@@ -1,5 +1,5 @@
 use crate::ripple_api::api_response::{ConversationChange, RelationUser, UserProfileData};
-use crate::store_engine::store_engine::StorageConversationData;
+use crate::store_engine::store_engine::{StorageConversationData, StorageMessageData};
 use ripple_proto::ripple_pb::{push_message_request, send_message_req, PushMessageRequest};
 use serde::{Deserialize, Serialize};
 
@@ -55,9 +55,9 @@ impl From<ConversationChange> for UIConversationItem {
             conversation_id: item.conversation_id,
             peer_id: item.peer_id,
             group_id: item.group_id,
-            last_message_id: item.last_message_id,
-            last_message: item.last_message,
-            last_message_timestamp: item.last_message_timestamp,
+            last_message_id: None,
+            last_message: None,
+            last_message_timestamp: None,
             last_read_message_id: item.last_read_message_id,
             unread_count: 0,
             name: item.name,
@@ -90,6 +90,41 @@ impl From<PushMessageRequest> for UIMessageItem {
                             sender_id: message_data.sender_id.to_string(),
                             content: msg_context.text.clone(),
                             timestamp: message_data.send_timestamp,
+                        }
+                    }
+                    _ => panic!("Unsupported message type in PushMessageRequest"),
+                }
+            }
+            _ => panic!("Invalid PushMessageRequest payload"),
+        }
+    }
+}
+
+impl From<&PushMessageRequest> for UIConversationItem {
+    fn from(req: &PushMessageRequest) -> Self {
+        match req.payload.as_ref() {
+            Some(push_message_request::Payload::MessageData(message_data)) => {
+                match &message_data.message {
+                    Some(send_message_req::Message::SingleMessageContent(msg_context)) => {
+                        UIConversationItem {
+                            conversation_id: message_data.conversation_id.clone(),
+                            peer_id: if message_data.sender_id != 0 {
+                                Some(message_data.sender_id.to_string())
+                            } else {
+                                None
+                            },
+                            group_id: if message_data.group_id != 0 {
+                                Some(message_data.group_id.to_string())
+                            } else {
+                                None
+                            },
+                            last_message_id: Some(message_data.message_id.to_string()),
+                            last_message: Some(msg_context.text.clone()),
+                            last_message_timestamp: Some(message_data.send_timestamp),
+                            last_read_message_id: None,
+                            unread_count: 0,
+                            name: None,
+                            avatar: None,
                         }
                     }
                     _ => panic!("Unsupported message type in PushMessageRequest"),

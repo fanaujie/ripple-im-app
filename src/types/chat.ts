@@ -6,17 +6,19 @@ import type { RelationUser } from './relations';
  */
 export enum ConversationAction {
   /** Create new conversation */
-  CREATE = 0,
+  CREATE = 1,
   /** New message received - upserts conversation */
-  NEW_MESSAGE = 1,
+  NEW_MESSAGE = 2,
   /** Mark messages as read */
-  READ_MESSAGE = 2,
+  READ_MESSAGE = 3,
   /** Update conversation name */
-  UPDATE_NAME = 3,
+  UPDATE_NAME = 4,
   /** Update conversation avatar */
-  UPDATE_AVATAR = 4,
+  UPDATE_AVATAR = 5,
+  /** Update both name and avatar */
+  UPDATE_NAME_AVATAR = 6,
   /** Delete a conversation */
-  DELETE = 5,
+  DELETE = 7,
   /** Clear all conversations (used during full sync) */
   CLEAR = -1,
 }
