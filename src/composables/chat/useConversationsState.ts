@@ -3,6 +3,7 @@ import type {
   ConversationDisplay,
   ConversationUpdateEvent,
   ConversationItem,
+  ConversationReceivedMessageEvent,
 } from '../../types/chat';
 import { ConversationAction } from '../../types/chat';
 import type { RelationUser } from '../../types/relations';
@@ -20,15 +21,80 @@ export function useConversationsState(relations: Ref<Map<string, RelationUser>>)
   const conversations = ref<ConversationDisplay[]>([]);
 
   /**
+   * Handle conversation insert event (conversation-inserted)
+   * Creates a new conversation or updates if it already exists
+   */
+  function handleInsert(conversation: ConversationItem): void {
+    updateConversation(conversation);
+    console.log('[useConversationsState] Inserted conversation:', conversation.conversationId);
+  }
+
+  /**
+   * Handle conversation update event (conversation-updated)
+   * Updates an existing conversation, replacing it entirely
+   */
+  function handleUpdate(conversation: ConversationItem): void {
+    updateConversation(conversation);
+    console.log('[useConversationsState] Updated conversation:', conversation.conversationId);
+  }
+
+  /**
+   * Handle conversation delete event (conversations-deleted)
+   * Removes a conversation by ID
+   */
+  function handleDelete(conversationId: string): void {
+    removeConversation(conversationId);
+    console.log('[useConversationsState] Deleted conversation:', conversationId);
+  }
+
+  /**
+   * Handle clear all event (conversations-cleared-all)
+   * Removes all conversations
+   */
+  function handleClearAll(): void {
+    conversations.value = [];
+    console.log('[useConversationsState] Cleared all conversations');
+  }
+
+  /**
+   * Handle new message preview event (conversation-received-new-message)
+   * Updates conversation's lastMessage, lastMessageTimestamp, and unreadCount
+   */
+  function handleReceivedNewMessage(event: ConversationReceivedMessageEvent): void {
+    const { conversationId, message, unreadCount, timestamp } = event;
+
+    // Find the conversation
+    const conversation = conversations.value.find(c => c.conversationId === conversationId);
+
+    if (conversation) {
+      // Convert UTC seconds (string) to milliseconds (number)
+      const timestampMs = parseInt(timestamp, 10) * 1000;
+
+      // Update preview and timestamp
+      conversation.lastMessage = message;
+      conversation.lastMessageTimestamp = timestampMs;
+      conversation.unreadCount = unreadCount;
+
+      console.log('[useConversationsState] Updated preview for:', conversationId, {
+        preview: message.substring(0, 20) + (message.length > 20 ? '...' : ''),
+        unreadCount,
+        timestamp: new Date(timestampMs).toISOString(),
+      });
+    } else {
+      console.warn('[useConversationsState] Conversation not found for message preview:', conversationId);
+    }
+  }
+
+  /**
    * Handle a conversation update event from the backend
+   * @deprecated Use separate handleInsert/handleUpdate/handleDelete/handleClearAll methods instead
    */
   function handleEvent(event: ConversationUpdateEvent): void {
     const { action, conversation } = event;
 
     // CLEAR action - reset everything
     if (action === ConversationAction.CLEAR) {
-      conversations.value = [];
-      console.log('[useConversationsState] Cleared all conversations');
+      handleClearAll();
       return;
     }
 
@@ -40,55 +106,17 @@ export function useConversationsState(relations: Ref<Map<string, RelationUser>>)
 
     switch (action) {
       case ConversationAction.CREATE:
-        // CREATE includes full data - do complete upsert
-        updateConversation(conversation);
-        console.log('[useConversationsState] Created conversation:', conversation.conversationId);
-        break;
-
       case ConversationAction.NEW_MESSAGE:
-        // NEW_MESSAGE only includes message fields - update specific fields to preserve name/avatar
-        updateConversationField(conversation.conversationId, {
-          lastMessageId: conversation.lastMessageId,
-          lastMessage: conversation.lastMessage,
-          lastMessageTimestamp: conversation.lastMessageTimestamp,
-          unreadCount: conversation.unreadCount,
-        });
-        console.log('[useConversationsState] Updated conversation with new message:', conversation.conversationId);
-        break;
-
       case ConversationAction.READ_MESSAGE:
-        // READ_MESSAGE only includes read-related fields
-        updateConversationField(conversation.conversationId, {
-          lastReadMessageId: conversation.lastReadMessageId,
-          unreadCount: conversation.unreadCount,
-        });
-        console.log('[useConversationsState] Updated read status:', conversation.conversationId);
-        break;
-
       case ConversationAction.UPDATE_NAME:
-        // Update only the name field
-        updateConversationField(conversation.conversationId, { name: conversation.name });
-        console.log('[useConversationsState] Updated name:', conversation.conversationId);
-        break;
-
       case ConversationAction.UPDATE_AVATAR:
-        // Update only the avatar field
-        updateConversationField(conversation.conversationId, { avatar: conversation.avatar });
-        console.log('[useConversationsState] Updated avatar:', conversation.conversationId);
-        break;
-
       case ConversationAction.UPDATE_NAME_AVATAR:
-        // Update both name and avatar fields atomically
-        updateConversationField(conversation.conversationId, {
-          name: conversation.name,
-          avatar: conversation.avatar
-        });
-        console.log('[useConversationsState] Updated name and avatar:', conversation.conversationId);
+        // All update-like actions now just do a full replace
+        handleUpdate(conversation);
         break;
 
       case ConversationAction.DELETE:
-        removeConversation(conversation.conversationId);
-        console.log('[useConversationsState] Deleted conversation:', conversation.conversationId);
+        handleDelete(conversation.conversationId);
         break;
 
       default:
@@ -152,30 +180,31 @@ export function useConversationsState(relations: Ref<Map<string, RelationUser>>)
 
   /**
    * Update specific fields of a conversation (for granular updates like name/avatar)
+   * @deprecated No longer needed with new event structure - full replace is used instead
    */
-  function updateConversationField(
-    conversationId: string,
-    updates: Partial<ConversationItem>
-  ): void {
-    const list = conversations.value;
-    const index = list.findIndex((c) => c.conversationId === conversationId);
-
-    if (index >= 0) {
-      const updated = {
-        ...list[index],
-        ...updates,
-      };
-      list.splice(index, 1, updated);
-    } else {
-      // This should not happen - conversation should exist after CREATE event
-      console.error(
-        '[useConversationsState] Cannot update conversation fields - conversation not found:',
-        conversationId,
-        'Updates:',
-        updates
-      );
-    }
-  }
+  // function updateConversationField(
+  //   conversationId: string,
+  //   updates: Partial<ConversationItem>
+  // ): void {
+  //   const list = conversations.value;
+  //   const index = list.findIndex((c) => c.conversationId === conversationId);
+  //
+  //   if (index >= 0) {
+  //     const updated = {
+  //       ...list[index],
+  //       ...updates,
+  //     };
+  //     list.splice(index, 1, updated);
+  //   } else {
+  //     // This should not happen - conversation should exist after CREATE event
+  //     console.error(
+  //       '[useConversationsState] Cannot update conversation fields - conversation not found:',
+  //       conversationId,
+  //       'Updates:',
+  //       updates
+  //     );
+  //   }
+  // }
 
   /**
    * Enrich conversation with peer profile from relations
@@ -192,21 +221,35 @@ export function useConversationsState(relations: Ref<Map<string, RelationUser>>)
   }
 
   /**
-   * Update unread count for a conversation (called after marking as read)
+   * Update unread count and optionally lastReadMessageId for a conversation
+   * (called after marking as read)
    */
-  function updateUnreadCount(conversationId: string, unreadCount: number): void {
+  function updateUnreadCount(
+    conversationId: string,
+    unreadCount: number,
+    lastReadMessageId?: string
+  ): void {
     const list = conversations.value;
     const index = list.findIndex((c) => c.conversationId === conversationId);
 
     if (index >= 0) {
-      const updated = { ...list[index], unreadCount };
+      const updated = {
+        ...list[index],
+        unreadCount,
+        ...(lastReadMessageId !== undefined && { lastReadMessageId }),
+      };
       list.splice(index, 1, updated);
     }
   }
 
   return {
     conversations,
-    handleEvent,
+    handleEvent, // @deprecated
+    handleInsert,
+    handleUpdate,
+    handleDelete,
+    handleClearAll,
+    handleReceivedNewMessage,
     initialize,
     updateUnreadCount,
   };

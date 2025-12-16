@@ -82,6 +82,8 @@ export interface RelationsData {
  *
  * IMPORTANT: Field name is camelCase (userProfile) to match Rust serialization
  * Rust uses #[serde(rename = "userProfile")] for JSON serialization
+ *
+ * @deprecated Use separate event types (RelationInsertedEvent, RelationUpdatedEvent, etc.) instead
  */
 export interface RelationUpdateEvent {
   /** Action type indicating what kind of update this is */
@@ -96,6 +98,30 @@ export interface RelationUpdateEvent {
    */
   userProfile: RelationUser | null;
 }
+
+/**
+ * Event payload for relation-inserted event
+ * Emitted when a new relation is created (friend added, user blocked)
+ */
+export type RelationInsertedEvent = RelationUser;
+
+/**
+ * Event payload for relation-updated event
+ * Emitted when an existing relation is modified (flags changed, profile updated)
+ */
+export type RelationUpdatedEvent = RelationUser;
+
+/**
+ * Event payload for relation-deleted event
+ * Emitted when a relation is removed (ID only)
+ */
+export type RelationDeletedEvent = string;
+
+/**
+ * Event payload for relations-cleared-all event
+ * Emitted when all relations are cleared (no data needed)
+ */
+export type RelationClearedAllEvent = void;
 
 /**
  * User action types for UI operations

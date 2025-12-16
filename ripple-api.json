@@ -1,0 +1,2435 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ripple API Gateway",
+    "description": "Main API gateway for Ripple IM system, providing user profile and friend relationship management APIs",
+    "contact": {
+      "name": "Ripple Team",
+      "email": "junjie725@gmail.com"
+    },
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:10002",
+      "description": "Development Environment"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Groups",
+      "description": "Group management APIs"
+    },
+    {
+      "name": "Users",
+      "description": "User-related APIs including profile, conversations, relations, and groups"
+    }
+  ],
+  "paths": {
+    "/api/users/me/friends": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Add friend",
+        "description": "Add a user to the friends list",
+        "operationId": "addFriend",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddFriendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully added friend",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters or friend relationship already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/conversations/summary": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get conversation summaries",
+        "description": "Retrieve summary information (last message and unread count) for specified conversations. Use this endpoint after incremental sync to get dynamic state.",
+        "operationId": "getConversationSummaries",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationSummaryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved conversation summaries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationSummaryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationSummaryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/conversations/messages": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Send message",
+        "description": "Send a text or file message to a conversation",
+        "operationId": "sendMessage",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/blocked-users": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Block user",
+        "description": "Add the specified user to the blocked users list",
+        "operationId": "blockUser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlockUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully blocked user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters or user already blocked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/groups": {
+      "post": {
+        "tags": [
+          "Groups"
+        ],
+        "summary": "Create group",
+        "description": "Create a new group chat with specified members",
+        "operationId": "createGroup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGroupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully created group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateGroupResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateGroupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateGroupResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden: Sender ID mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateGroupResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/groups/{groupId}/members": {
+      "get": {
+        "tags": [
+          "Groups"
+        ],
+        "summary": "Get group members with pagination",
+        "description": "Retrieve the list of members in a group with pagination support",
+        "operationId": "getGroupMembers",
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "description": "Group ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "nextPageToken",
+            "in": "query",
+            "description": "Next page token for pagination (optional)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of members per page (default: 50, max: 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved members",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetGroupMembersResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid group ID format or page size",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetGroupMembersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetGroupMembersResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden: Not a group member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetGroupMembersResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Group not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetGroupMembersResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Groups"
+        ],
+        "summary": "Add members to group",
+        "description": "Invite new members to an existing group",
+        "operationId": "addGroupMembers",
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "description": "Group ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteGroupMemberRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully added members",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden: Sender ID mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/profile": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get current user's profile",
+        "description": "Retrieve profile information for the currently authenticated user",
+        "operationId": "getMyProfile",
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved user profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update user profile",
+        "description": "Update profile information for the currently authenticated user",
+        "operationId": "updateProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully updated profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/friends/{friendId}": {
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Remove friend",
+        "description": "Remove the specified friend from the friends list",
+        "operationId": "removeFriend",
+        "parameters": [
+          {
+            "name": "friendId",
+            "in": "path",
+            "description": "Friend ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully removed friend",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Friend relationship does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update friend",
+        "description": "Update the attributes of the specified friend (e.g., remark name)",
+        "operationId": "updateFriend",
+        "parameters": [
+          {
+            "name": "friendId",
+            "in": "path",
+            "description": "Friend ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFriendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully updated friend",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters or friend relationship does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/conversations/{conversationId}/read-position": {
+      "patch": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update read position",
+        "description": "Update the last read message position in a conversation",
+        "operationId": "updateReadPosition",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "description": "Conversation ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReadPositionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/blocked-users/{userId}": {
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Unblock user",
+        "description": "Remove the specified user from the blocked users list",
+        "operationId": "unblockUser",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "description": "Target user ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully unblocked user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "User is not blocked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update blocked user",
+        "description": "Update the attributes of the specified blocked user (e.g., hidden status)",
+        "operationId": "updateBlockedUser",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "description": "Target user ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBlockedUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully updated blocked user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "User is not blocked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/groups/{groupId}": {
+      "patch": {
+        "tags": [
+          "Groups"
+        ],
+        "summary": "Update group",
+        "description": "Update the name or avatar of a group",
+        "operationId": "updateGroup",
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "description": "Group ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateGroupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully updated group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden: Sender ID mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/{userId}/profile": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get user's profile",
+        "description": "Retrieve profile information for the specified user",
+        "operationId": "getUserProfile",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "description": "User ID to retrieve profile for",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved user profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User profile not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/relations": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get user relations with pagination",
+        "description": "Retrieve all relations (friends and blocked users) for the current user with pagination support",
+        "operationId": "getRelations",
+        "parameters": [
+          {
+            "name": "nextPageToken",
+            "in": "query",
+            "description": "Next page token for pagination (optional)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of relations per page (default: 50, max: 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved user relations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRelationsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/relations/sync": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Sync relations",
+        "description": "Synchronize relation list changes. Returns full sync flag and incremental changes if available.",
+        "operationId": "syncRelations",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "query",
+            "description": "Client's last known version (optional)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved sync data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationSyncResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/groups": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get user's groups with pagination",
+        "description": "Retrieve all groups that the current user belongs to with pagination support",
+        "operationId": "getUserGroups",
+        "parameters": [
+          {
+            "name": "nextPageToken",
+            "in": "query",
+            "description": "Next page token for pagination (optional)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of groups per page (default: 50, max: 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved user's groups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetUserGroupsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page size",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetUserGroupsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/groups/sync": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Sync user's groups",
+        "description": "Synchronize user's group list changes. Returns full sync flag and incremental changes if available.",
+        "operationId": "syncUserGroups",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "query",
+            "description": "Client's last known version (optional)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved sync data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserGroupSyncResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/conversations": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get conversations",
+        "description": "Retrieve a paginated list of conversations for the current user",
+        "operationId": "getConversations",
+        "parameters": [
+          {
+            "name": "nextPageToken",
+            "in": "query",
+            "description": "Next page token for pagination (optional)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of conversations per page (default: 50, max: 200)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved conversations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/conversations/{conversationId}/messages": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Read messages",
+        "description": "Retrieve messages from a conversation before the specified message ID. Returns messages in descending order by message ID (newest to oldest relative to the anchor message).",
+        "operationId": "readMessages",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "description": "Conversation ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "query",
+            "description": "Message ID to read from (fetch messages before this ID)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "readSize",
+            "in": "query",
+            "description": "Number of messages to retrieve (default: 50, max: 200)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadMessagesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/conversations/sync": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Sync conversations",
+        "description": "Synchronize conversation list changes. Returns full sync flag and incremental changes if available.",
+        "operationId": "syncConversations",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "query",
+            "description": "Client's last known version (optional)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved sync data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationSyncResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/groups/{groupId}/members/sync": {
+      "get": {
+        "tags": [
+          "Groups"
+        ],
+        "summary": "Sync group members",
+        "description": "Synchronize group member changes. Returns full sync flag and incremental changes if available.",
+        "operationId": "syncGroupMembers",
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "description": "Group ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "description": "Client's last known version (optional)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved sync data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupSyncResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/avatar": {
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Delete user avatar",
+        "description": "Delete the avatar of the currently authenticated user",
+        "operationId": "deleteAvatar",
+        "responses": {
+          "200": {
+            "description": "Successfully deleted avatar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/groups/{groupId}/members/me": {
+      "delete": {
+        "tags": [
+          "Groups"
+        ],
+        "summary": "Leave group",
+        "description": "Remove current user from a group",
+        "operationId": "leaveGroup",
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "description": "Group ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully left group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddFriendRequest": {
+        "type": "object",
+        "description": "Add friend request",
+        "properties": {
+          "targetUserId": {
+            "type": "string"
+          }
+        }
+      },
+      "CommonResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ConversationSummaryRequest": {
+        "type": "object",
+        "description": "Conversation IDs to retrieve summaries for",
+        "properties": {
+          "conversationIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "conversationIds"
+        ]
+      },
+      "ConversationSummary": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string"
+          },
+          "unreadCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lastMessageText": {
+            "type": "string"
+          },
+          "lastMessageTimestamp": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastMessageId": {
+            "type": "string"
+          }
+        }
+      },
+      "ConversationSummaryData": {
+        "type": "object",
+        "properties": {
+          "summaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationSummary"
+            }
+          }
+        }
+      },
+      "ConversationSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ConversationSummaryData"
+          }
+        }
+      },
+      "SendMessageRequest": {
+        "type": "object",
+        "description": "Conversation ID",
+        "properties": {
+          "senderId": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "receiverId": {
+            "type": "string"
+          },
+          "groupId": {
+            "type": "string"
+          },
+          "textContent": {
+            "type": "string"
+          },
+          "fileUrl": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "senderId"
+        ]
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/MessageResponseData"
+          }
+        }
+      },
+      "MessageResponseData": {
+        "type": "object",
+        "properties": {
+          "messageId": {
+            "type": "string"
+          }
+        }
+      },
+      "BlockUserRequest": {
+        "type": "object",
+        "description": "Block user request",
+        "properties": {
+          "targetUserId": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateGroupRequest": {
+        "type": "object",
+        "properties": {
+          "senderId": {
+            "type": "string"
+          },
+          "groupName": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0
+          },
+          "groupAvatar": {
+            "type": "string"
+          },
+          "memberIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "groupName",
+          "memberIds",
+          "senderId"
+        ]
+      },
+      "CreateGroupResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/GroupData"
+          }
+        }
+      },
+      "GroupData": {
+        "type": "object",
+        "properties": {
+          "groupId": {
+            "type": "string"
+          }
+        }
+      },
+      "InviteGroupMemberRequest": {
+        "type": "object",
+        "properties": {
+          "senderId": {
+            "type": "string"
+          },
+          "newMemberIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "groupName": {
+            "type": "string"
+          },
+          "groupAvatar": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "groupName",
+          "newMemberIds",
+          "senderId"
+        ]
+      },
+      "UpdateProfileRequest": {
+        "type": "object",
+        "description": "Profile update request",
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "description": "New nickname for the user",
+            "example": "John Doe"
+          }
+        }
+      },
+      "UpdateFriendRequest": {
+        "type": "object",
+        "description": "Friend update request",
+        "properties": {
+          "remarkName": {
+            "type": "string",
+            "description": "New remark name for the friend",
+            "example": "Best Friend"
+          }
+        }
+      },
+      "UpdateReadPositionRequest": {
+        "type": "object",
+        "description": "Request to update read position in a conversation",
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "description": "Message ID to mark as the last read message",
+            "example": 123456789,
+            "minLength": 1
+          }
+        },
+        "required": [
+          "messageId"
+        ]
+      },
+      "UpdateBlockedUserRequest": {
+        "type": "object",
+        "description": "Blocked user update request",
+        "properties": {
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether to hide the blocked user from the list",
+            "example": true
+          }
+        }
+      },
+      "UpdateGroupRequest": {
+        "type": "object",
+        "description": "Request to update group attributes",
+        "properties": {
+          "senderId": {
+            "type": "string",
+            "description": "ID of the user making the request",
+            "example": 123456789,
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "New name for the group",
+            "example": "My Group"
+          },
+          "avatar": {
+            "type": "string",
+            "description": "New avatar URL for the group",
+            "example": "https://example.com/avatar.png"
+          }
+        },
+        "required": [
+          "senderId"
+        ]
+      },
+      "UserProfileData": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "nickName": {
+            "type": "string"
+          },
+          "avatar": {
+            "type": "string"
+          }
+        }
+      },
+      "UserProfileResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/UserProfileData"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "nickName": {
+            "type": "string"
+          },
+          "avatar": {
+            "type": "string"
+          },
+          "remarkName": {
+            "type": "string"
+          },
+          "relationFlags": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "UserRelationsData": {
+        "type": "object",
+        "properties": {
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/User"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "lastVersion": {
+            "type": "string"
+          }
+        }
+      },
+      "UserRelationsResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/UserRelationsData"
+          }
+        }
+      },
+      "RelationChange": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "nickName": {
+            "type": "string"
+          },
+          "avatar": {
+            "type": "string"
+          },
+          "remarkName": {
+            "type": "string"
+          },
+          "relationFlags": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "RelationSyncData": {
+        "type": "object",
+        "properties": {
+          "fullSync": {
+            "type": "boolean"
+          },
+          "latestVersion": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationChange"
+            }
+          }
+        }
+      },
+      "RelationSyncResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RelationSyncData"
+          }
+        }
+      },
+      "GetUserGroupsResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/UserGroupsData"
+          }
+        }
+      },
+      "UserGroupData": {
+        "type": "object",
+        "properties": {
+          "groupId": {
+            "type": "string"
+          },
+          "groupName": {
+            "type": "string"
+          },
+          "groupAvatar": {
+            "type": "string"
+          }
+        }
+      },
+      "UserGroupsData": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserGroupData"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "lastVersion": {
+            "type": "string"
+          }
+        }
+      },
+      "UserGroupChange": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "groupId": {
+            "type": "string"
+          },
+          "groupName": {
+            "type": "string"
+          },
+          "groupAvatar": {
+            "type": "string"
+          }
+        }
+      },
+      "UserGroupSyncData": {
+        "type": "object",
+        "properties": {
+          "fullSync": {
+            "type": "boolean"
+          },
+          "latestVersion": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserGroupChange"
+            }
+          }
+        }
+      },
+      "UserGroupSyncResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/UserGroupSyncData"
+          }
+        }
+      },
+      "ConversationItem": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string"
+          },
+          "peerId": {
+            "type": "string"
+          },
+          "groupId": {
+            "type": "string"
+          },
+          "lastReadMessageId": {
+            "type": "string"
+          },
+          "unreadCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "avatar": {
+            "type": "string"
+          },
+          "lastMessageText": {
+            "type": "string"
+          },
+          "lastMessageTimestamp": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastMessageId": {
+            "type": "string"
+          }
+        }
+      },
+      "ConversationsData": {
+        "type": "object",
+        "properties": {
+          "conversations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationItem"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "lastVersion": {
+            "type": "string"
+          }
+        }
+      },
+      "ConversationsResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ConversationsData"
+          }
+        }
+      },
+      "MessageItem": {
+        "type": "object",
+        "properties": {
+          "senderId": {
+            "type": "string"
+          },
+          "receiverId": {
+            "type": "string"
+          },
+          "groupId": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "sendTimestamp": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "messageType": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "text": {
+            "type": "string"
+          },
+          "fileUrl": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "commandType": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "commandData": {
+            "type": "string"
+          }
+        }
+      },
+      "ReadMessagesData": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageItem"
+            }
+          }
+        }
+      },
+      "ReadMessagesResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ReadMessagesData"
+          }
+        }
+      },
+      "ConversationChange": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "peerId": {
+            "type": "string"
+          },
+          "groupId": {
+            "type": "string"
+          },
+          "lastReadMessageId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "avatar": {
+            "type": "string"
+          }
+        }
+      },
+      "ConversationSyncData": {
+        "type": "object",
+        "properties": {
+          "fullSync": {
+            "type": "boolean"
+          },
+          "latestVersion": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationChange"
+            }
+          }
+        }
+      },
+      "ConversationSyncResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ConversationSyncData"
+          }
+        }
+      },
+      "GetGroupMembersResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/GroupMembersData"
+          }
+        }
+      },
+      "GroupMemberData": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "avatar": {
+            "type": "string"
+          }
+        }
+      },
+      "GroupMembersData": {
+        "type": "object",
+        "properties": {
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupMemberData"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "lastVersion": {
+            "type": "string"
+          }
+        }
+      },
+      "GroupChange": {
+        "type": "object",
+        "properties": {
+          "groupId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupChangeDetail"
+            }
+          }
+        }
+      },
+      "GroupChangeDetail": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "avatar": {
+            "type": "string"
+          }
+        }
+      },
+      "GroupSyncData": {
+        "type": "object",
+        "properties": {
+          "fullSync": {
+            "type": "boolean"
+          },
+          "latestVersion": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupChange"
+            }
+          }
+        }
+      },
+      "GroupSyncResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/GroupSyncData"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "description": "JWT Bearer Token Authentication",
+        "name": "bearerAuth",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

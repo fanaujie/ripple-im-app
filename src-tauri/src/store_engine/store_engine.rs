@@ -1,12 +1,9 @@
 use crate::ripple_api::api_response::{
-    ConversationChange, ConversationItem, MessageItem, RelationUser, UserProfileData,
+    ConversationChange, ConversationItem, GroupMemberData, MessageItem, RelationUser,
+    UserGroupData, UserProfileData,
 };
-use crate::ripple_syncer::conversation_operation::ConversationStorageAction;
-use crate::ripple_syncer::relation_operation::RelationAction;
-use ripple_proto::ripple_pb::{push_message_request, send_message_req, PushMessageRequest};
-use serde::{Deserialize, Serialize};
+
 use std::collections::{BTreeMap, HashMap};
-use std::future::Future;
 use std::option::Option;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -17,160 +14,136 @@ pub struct Token {
 }
 
 #[derive(Clone, Debug)]
-pub struct StorageUserProfileData {
-    pub user_id: i64,
-    pub nick_name: String,
-    pub avatar: Option<String>,
-}
-
-impl From<UserProfileData> for StorageUserProfileData {
-    fn from(profile: UserProfileData) -> Self {
-        StorageUserProfileData {
-            user_id: profile.user_id.parse().unwrap(),
-            nick_name: profile.nick_name,
-            avatar: profile.avatar,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct StorageConversationData {
+pub struct ConversationRecord {
     pub conversation_id: String,
     pub peer_id: Option<String>,
     pub group_id: Option<String>,
-    pub last_message_id: i64,
-    pub last_message: String,
-    pub last_message_timestamp: i64,
-    pub last_read_message_id: Option<i64>,
-    pub unread_count: i32,
+    pub last_message_id: Option<String>,
+    pub last_read_message_id: Option<String>,
+    pub unread_count: i64,
+    pub last_message_text: Option<String>,
+    pub last_message_timestamp: Option<i64>,
     pub name: String,
     pub avatar: Option<String>,
 }
 
-impl From<ConversationItem> for StorageConversationData {
+impl From<ConversationItem> for ConversationRecord {
     fn from(item: ConversationItem) -> Self {
-        StorageConversationData {
+        ConversationRecord {
             conversation_id: item.conversation_id,
             peer_id: item.peer_id,
             group_id: item.group_id,
-            last_message_id: item.last_message_id.parse().unwrap_or(0),
-            last_message: item.last_message,
+            last_message_id: item.last_message_id,
+            last_read_message_id: item.last_read_message_id,
+            unread_count: item.unread_count,
+            last_message_text: item.last_message_text,
             last_message_timestamp: item.last_message_timestamp,
-            last_read_message_id: item
-                .last_read_message_id
-                .as_ref()
-                .and_then(|id| id.parse().ok()),
-            unread_count: item.unread_count as i32,
             name: item.name,
             avatar: item.avatar,
         }
     }
 }
 
-impl From<&ConversationChange> for StorageConversationData {
-    fn from(change: &ConversationChange) -> Self {
-        StorageConversationData {
-            conversation_id: change.conversation_id.clone(),
-            peer_id: change.peer_id.clone(),
-            group_id: change.group_id.clone(),
-            last_message_id: 0,
-            last_message: String::default(),
-            last_message_timestamp: 0,
-            last_read_message_id: change
-                .last_read_message_id
-                .as_ref()
-                .and_then(|id| id.parse().ok()),
-            unread_count: 0,
-            name: change.name.clone().unwrap_or_default(),
-            avatar: change.avatar.clone(),
-        }
-    }
-}
-#[derive(Clone, Debug)]
-pub struct StorageMessageData {
-    pub conversation_id: String,
-    pub message_id: i64,
-    pub sender_id: i64,
-    pub receiver_id: i64,
-    pub group_id: i64,
-    pub send_timestamp: i64,
-    pub text_content: Option<String>,
-    pub file_url: Option<String>,
-    pub file_name: Option<String>,
-}
-
-impl From<&MessageItem> for StorageMessageData {
-    fn from(item: &MessageItem) -> Self {
-        StorageMessageData {
-            conversation_id: item.conversation_id.clone(),
-            message_id: item.message_id.parse().unwrap_or(0),
-            sender_id: item.sender_id.parse().unwrap_or(0),
-            receiver_id: item
-                .receiver_id
-                .as_ref()
-                .and_then(|id| id.parse().ok())
-                .unwrap_or(0),
-            group_id: item
-                .group_id
-                .as_ref()
-                .and_then(|id| id.parse().ok())
-                .unwrap_or(0),
-            send_timestamp: item.send_timestamp,
-            text_content: item.text_content.clone(),
-            file_url: item.file_url.clone(),
-            file_name: item.file_name.clone(),
+impl From<ConversationChange> for ConversationRecord {
+    fn from(item: ConversationChange) -> Self {
+        ConversationRecord {
+            conversation_id: item.conversation_id,
+            peer_id: item.peer_id,
+            group_id: item.group_id,
+            last_message_id: None, // ConversationChange doesn't include last_message_id
+            last_read_message_id: item.last_read_message_id,
+            unread_count: 0, // ConversationChange doesn't include unread_count
+            last_message_text: None, // ConversationChange doesn't include last_message_text
+            last_message_timestamp: None, // ConversationChange doesn't include last_message_timestamp
+            name: item.name.unwrap(),
+            avatar: item.avatar,
         }
     }
 }
 
-impl From<&PushMessageRequest> for StorageMessageData {
-    fn from(req: &PushMessageRequest) -> Self {
-        match req.payload.as_ref() {
-            Some(push_message_request::Payload::MessageData(message_data)) => {
-                match &message_data.message {
-                    Some(send_message_req::Message::SingleMessageContent(msg_context)) => {
-                        StorageMessageData {
-                            conversation_id: message_data.conversation_id.clone(),
-                            message_id: message_data.message_id,
-                            sender_id: message_data.sender_id,
-                            receiver_id: message_data.receiver_id,
-                            group_id: message_data.group_id,
-                            send_timestamp: message_data.send_timestamp,
-                            text_content: Some(msg_context.text.clone()),
-                            file_url: Some(msg_context.file_url.clone()),
-                            file_name: Some(msg_context.file_name.clone()),
-                        }
-                    }
-                    _ => panic!("Unsupported message type in PushMessageRequest"),
-                }
-            }
-            _ => panic!("Invalid PushMessageRequest payload"),
-        }
-    }
+#[derive(Debug)]
+pub enum RelationStorageAction {
+    Upsert(RelationUser),
+    UpdateRemarkName {
+        user_id: String,
+        remark_name: String,
+    },
+    UpdateNickName {
+        user_id: String,
+        nick_name: String,
+    },
+    UpdateAvatar {
+        user_id: String,
+        avatar: Option<String>,
+    },
+    UpdateFlags {
+        user_id: String,
+        flags: i32,
+    },
+    Delete {
+        user_id: String,
+    },
+    UpdateNickNameAvatar {
+        user_id: String,
+        nick_name: String,
+        avatar: Option<String>,
+    },
+}
+#[derive(Debug)]
+pub enum ConversationStorageAction {
+    Create(ConversationRecord),
+    UpdateLastReadMessageId {
+        conversation_id: String,
+        last_read_message_id: String,
+    },
+    UpdateName {
+        conversation_id: String,
+        name: String,
+    },
+    UpdateAvatar {
+        conversation_id: String,
+        avatar: String,
+    },
+    UpdateNameAvatar {
+        conversation_id: String,
+        name: String,
+        avatar: String,
+    },
+    Delete {
+        conversation_id: String,
+    },
 }
 
-impl From<StorageMessageData> for MessageItem {
-    fn from(data: StorageMessageData) -> Self {
-        MessageItem {
-            conversation_id: data.conversation_id,
-            message_id: data.message_id.to_string(),
-            sender_id: data.sender_id.to_string(),
-            receiver_id: if data.receiver_id == 0 {
-                None
-            } else {
-                Some(data.receiver_id.to_string())
-            },
-            group_id: if data.group_id == 0 {
-                None
-            } else {
-                Some(data.group_id.to_string())
-            },
-            send_timestamp: data.send_timestamp,
-            text_content: data.text_content,
-            file_url: data.file_url,
-            file_name: data.file_name,
-        }
-    }
+#[derive(Debug)]
+pub enum UserGroupStorageAction {
+    Upsert(UserGroupData),
+    UpdateName {
+        group_id: String,
+        name: String,
+    },
+    UpdateAvatar {
+        group_id: String,
+        avatar: Option<String>,
+    },
+    Delete {
+        group_id: String,
+    },
+}
+
+#[derive(Debug)]
+pub enum GroupMemberStorageAction {
+    Upsert(GroupMemberData),
+    UpdateName {
+        user_id: String,
+        name: String,
+    },
+    UpdateAvatar {
+        user_id: String,
+        avatar: Option<String>,
+    },
+    Delete {
+        user_id: String,
+    },
 }
 
 #[trait_variant::make(RippleStorage: Send)]
@@ -183,8 +156,8 @@ pub trait StoreEngine: Sync + Clone + 'static {
     async fn save_device_id(&self, device_id: &Uuid) -> anyhow::Result<()>;
     async fn get_token(&self) -> anyhow::Result<Option<Token>>;
     async fn save_token(&self, access_token: &str, refresh_token: &str) -> anyhow::Result<()>;
-    async fn get_user_profile(&self) -> anyhow::Result<Option<StorageUserProfileData>>;
-    async fn save_user_profile(&self, profile: StorageUserProfileData) -> anyhow::Result<()>;
+    async fn get_user_profile(&self) -> anyhow::Result<Option<UserProfileData>>;
+    async fn save_user_profile(&self, profile: UserProfileData) -> anyhow::Result<()>;
 
     async fn apply_relation_all(
         &self,
@@ -193,7 +166,7 @@ pub trait StoreEngine: Sync + Clone + 'static {
     ) -> anyhow::Result<()>;
     async fn apply_relation_action(
         &self,
-        action: RelationAction,
+        action: RelationStorageAction,
         version: String,
         need_result: bool,
     ) -> anyhow::Result<Option<RelationUser>>;
@@ -205,32 +178,81 @@ pub trait StoreEngine: Sync + Clone + 'static {
 
     async fn apply_conversation_all(
         &self,
-        conversations: Vec<StorageConversationData>,
+        conversations: Vec<ConversationRecord>,
         last_version: &str,
     ) -> anyhow::Result<()>;
     async fn apply_conversation_action(
         &self,
         action: ConversationStorageAction,
         version: String,
-        user_id: i64,
         need_result: bool,
-    ) -> anyhow::Result<Option<StorageConversationData>>;
+    ) -> anyhow::Result<Option<ConversationRecord>>;
     async fn conversation_exists(&self, conversation_id: &str) -> anyhow::Result<bool>;
-    async fn get_all_conversations(&self) -> anyhow::Result<Vec<StorageConversationData>>;
+    async fn get_conversation_by_id(
+        &self,
+        conversation_id: &str,
+    ) -> anyhow::Result<Option<ConversationRecord>>;
+    async fn get_all_conversations(&self) -> anyhow::Result<Vec<ConversationRecord>>;
     async fn get_conversation_version(&self) -> anyhow::Result<Option<String>>;
     async fn clear_all_conversations(&self) -> anyhow::Result<()>;
-    async fn store_message(&self, message: StorageMessageData) -> anyhow::Result<i32>;
+    async fn update_conversation_summary(
+        &self,
+        conversation_id: &str,
+        unread_count: i64,
+        last_message_id: Option<String>,
+        last_message_text: Option<String>,
+        last_message_timestamp: Option<i64>,
+    ) -> anyhow::Result<()>;
+    async fn store_message(&self, message: MessageItem) -> anyhow::Result<()>;
+    async fn get_latest_message(
+        &self,
+        conversation_id: &str,
+    ) -> anyhow::Result<Option<MessageItem>>;
     async fn get_latest_messages(
         &self,
         conversation_id: &str,
         limit: u32,
-    ) -> anyhow::Result<Vec<StorageMessageData>>;
+    ) -> anyhow::Result<Vec<MessageItem>>;
     async fn get_messages_before(
         &self,
         conversation_id: &str,
-        before_message_id: i64,
+        before_message_id: &str,
         limit: u32,
-    ) -> anyhow::Result<Vec<StorageMessageData>>;
+    ) -> anyhow::Result<Vec<MessageItem>>;
+
+    async fn exist_user_groups(&self) -> anyhow::Result<bool>;
+    async fn apply_user_group_all(
+        &self,
+        groups: Vec<UserGroupData>,
+        version: &str,
+    ) -> anyhow::Result<()>;
+    async fn apply_user_group_action(
+        &self,
+        action: UserGroupStorageAction,
+        version: String,
+        need_result: bool,
+    ) -> anyhow::Result<Option<UserGroupData>>;
+    async fn get_all_user_groups(&self) -> anyhow::Result<Vec<UserGroupData>>;
+    async fn get_user_group_version(&self) -> anyhow::Result<Option<String>>;
+    async fn clear_all_user_groups(&self) -> anyhow::Result<()>;
+
+    async fn exist_group_members(&self, group_id: &str) -> anyhow::Result<bool>;
+    async fn apply_group_member_all(
+        &self,
+        group_id: &str,
+        members: Vec<GroupMemberData>,
+        version: &str,
+    ) -> anyhow::Result<()>;
+    async fn apply_group_member_action(
+        &self,
+        group_id: &str,
+        action: GroupMemberStorageAction,
+        version: String,
+        need_result: bool,
+    ) -> anyhow::Result<Option<GroupMemberData>>;
+    async fn get_all_group_members(&self, group_id: &str) -> anyhow::Result<Vec<GroupMemberData>>;
+    async fn get_group_member_version(&self, group_id: &str) -> anyhow::Result<Option<String>>;
+    async fn clear_group_members(&self, group_id: &str) -> anyhow::Result<()>;
 }
 
 #[derive(Clone)]
@@ -242,12 +264,18 @@ struct InnerStore {
     access_token: Option<String>,
     refresh_token: Option<String>,
     uuid: Option<Uuid>,
-    user_profile: Option<StorageUserProfileData>,
+    user_profile: Option<UserProfileData>,
     relations: HashMap<String, RelationUser>,
     relation_version: Option<String>,
-    conversations: HashMap<String, StorageConversationData>,
+    conversations: HashMap<String, ConversationRecord>,
     conversation_version: Option<String>,
-    messages: HashMap<String, BTreeMap<i64, StorageMessageData>>,
+    messages: HashMap<String, BTreeMap<String, MessageItem>>,
+    // User Groups
+    user_groups: HashMap<String, UserGroupData>,
+    user_groups_version: Option<String>,
+    // Group Members: group_id -> (user_id -> member)
+    group_members: HashMap<String, HashMap<String, GroupMemberData>>,
+    group_member_versions: HashMap<String, String>,
 }
 
 impl MemoryStore {
@@ -263,6 +291,10 @@ impl MemoryStore {
                 conversations: HashMap::new(),
                 conversation_version: None,
                 messages: HashMap::new(),
+                user_groups: HashMap::new(),
+                user_groups_version: None,
+                group_members: HashMap::new(),
+                group_member_versions: HashMap::new(),
             })),
         }
     }
@@ -317,12 +349,12 @@ impl RippleStorage for MemoryStore {
         Ok(())
     }
 
-    async fn get_user_profile(&self) -> anyhow::Result<Option<StorageUserProfileData>> {
+    async fn get_user_profile(&self) -> anyhow::Result<Option<UserProfileData>> {
         let inner = self.inner.lock().await;
         Ok(inner.user_profile.clone())
     }
 
-    async fn save_user_profile(&self, profile: StorageUserProfileData) -> anyhow::Result<()> {
+    async fn save_user_profile(&self, profile: UserProfileData) -> anyhow::Result<()> {
         let mut inner = self.inner.lock().await;
         inner.user_profile = Some(profile);
         Ok(())
@@ -343,14 +375,14 @@ impl RippleStorage for MemoryStore {
     }
     async fn apply_relation_action(
         &self,
-        action: RelationAction,
+        action: RelationStorageAction,
         version: String,
         need_result: bool,
     ) -> anyhow::Result<Option<RelationUser>> {
         let mut inner = self.inner.lock().await;
         inner.relation_version = Some(version);
         match action {
-            RelationAction::Upsert(relation) => {
+            RelationStorageAction::Upsert(relation) => {
                 inner
                     .relations
                     .insert(relation.user_id.clone(), relation.clone());
@@ -360,7 +392,7 @@ impl RippleStorage for MemoryStore {
                     Ok(None)
                 }
             }
-            RelationAction::UpdateRemarkName {
+            RelationStorageAction::UpdateRemarkName {
                 user_id,
                 remark_name,
             } => match inner.relations.get_mut(&user_id) {
@@ -375,7 +407,7 @@ impl RippleStorage for MemoryStore {
                 None => Ok(None),
             },
 
-            RelationAction::UpdateNickName { user_id, nick_name } => {
+            RelationStorageAction::UpdateNickName { user_id, nick_name } => {
                 match inner.relations.get_mut(&user_id) {
                     Some(relation) => {
                         relation.nick_name = nick_name;
@@ -389,7 +421,7 @@ impl RippleStorage for MemoryStore {
                 }
             }
 
-            RelationAction::UpdateAvatar { user_id, avatar } => {
+            RelationStorageAction::UpdateAvatar { user_id, avatar } => {
                 match inner.relations.get_mut(&user_id) {
                     Some(relation) => {
                         relation.avatar = avatar;
@@ -403,7 +435,7 @@ impl RippleStorage for MemoryStore {
                 }
             }
 
-            RelationAction::UpdateFlags { user_id, flags } => {
+            RelationStorageAction::UpdateFlags { user_id, flags } => {
                 match inner.relations.get_mut(&user_id) {
                     Some(relation) => {
                         relation.relation_flags = flags;
@@ -416,11 +448,11 @@ impl RippleStorage for MemoryStore {
                     None => Ok(None),
                 }
             }
-            RelationAction::Delete { user_id } => {
+            RelationStorageAction::Delete { user_id } => {
                 inner.relations.remove(&user_id);
                 Ok(None)
             }
-            RelationAction::UpdateNickNameAvatar {
+            RelationStorageAction::UpdateNickNameAvatar {
                 user_id,
                 nick_name,
                 avatar,
@@ -462,7 +494,7 @@ impl RippleStorage for MemoryStore {
 
     async fn apply_conversation_all(
         &self,
-        conversations: Vec<StorageConversationData>,
+        conversations: Vec<ConversationRecord>,
         last_version: &str,
     ) -> anyhow::Result<()> {
         let mut inner = self.inner.lock().await;
@@ -480,9 +512,8 @@ impl RippleStorage for MemoryStore {
         &self,
         action: ConversationStorageAction,
         version: String,
-        user_id: i64,
         need_result: bool,
-    ) -> anyhow::Result<Option<StorageConversationData>> {
+    ) -> anyhow::Result<Option<ConversationRecord>> {
         let mut inner = self.inner.lock().await;
         inner.conversation_version = Some(version);
         match action {
@@ -496,24 +527,20 @@ impl RippleStorage for MemoryStore {
                     Ok(None)
                 }
             }
-            ConversationStorageAction::UpdateReadStatus {
+            ConversationStorageAction::UpdateLastReadMessageId {
                 conversation_id,
                 last_read_message_id,
-            } => {
-                let last_read_id = last_read_message_id.unwrap_or(0);
-                match inner.conversations.get_mut(&conversation_id) {
-                    Some(conv) => {
-                        conv.last_read_message_id = Some(last_read_id);
-                        conv.unread_count = 0;
-                        if need_result {
-                            Ok(Some(conv.clone()))
-                        } else {
-                            Ok(None)
-                        }
+            } => match inner.conversations.get_mut(&conversation_id) {
+                Some(conv) => {
+                    conv.last_read_message_id = Some(last_read_message_id);
+                    if need_result {
+                        Ok(Some(conv.clone()))
+                    } else {
+                        Ok(None)
                     }
-                    None => Ok(None),
                 }
-            }
+                None => Ok(None),
+            },
             ConversationStorageAction::UpdateName {
                 conversation_id,
                 name,
@@ -558,6 +585,14 @@ impl RippleStorage for MemoryStore {
                 }
                 None => Ok(None),
             },
+            ConversationStorageAction::Delete { conversation_id } => {
+                let removed = inner.conversations.remove(&conversation_id);
+                if need_result {
+                    Ok(removed)
+                } else {
+                    Ok(None)
+                }
+            }
         }
     }
     async fn conversation_exists(&self, conversation_id: &str) -> anyhow::Result<bool> {
@@ -565,7 +600,15 @@ impl RippleStorage for MemoryStore {
         Ok(inner.conversations.contains_key(conversation_id))
     }
 
-    async fn get_all_conversations(&self) -> anyhow::Result<Vec<StorageConversationData>> {
+    async fn get_conversation_by_id(
+        &self,
+        conversation_id: &str,
+    ) -> anyhow::Result<Option<ConversationRecord>> {
+        let inner = self.inner.lock().await;
+        Ok(inner.conversations.get(conversation_id).cloned())
+    }
+
+    async fn get_all_conversations(&self) -> anyhow::Result<Vec<ConversationRecord>> {
         let inner = self.inner.lock().await;
         Ok(inner.conversations.values().cloned().collect())
     }
@@ -581,42 +624,77 @@ impl RippleStorage for MemoryStore {
         Ok(())
     }
 
-    async fn store_message(&self, message: StorageMessageData) -> anyhow::Result<i32> {
+    async fn update_conversation_summary(
+        &self,
+        conversation_id: &str,
+        unread_count: i64,
+        last_message_id: Option<String>,
+        last_message_text: Option<String>,
+        last_message_timestamp: Option<i64>,
+    ) -> anyhow::Result<()> {
         let mut inner = self.inner.lock().await;
+        if let Some(conv) = inner.conversations.get_mut(conversation_id) {
+            conv.unread_count = unread_count;
+            conv.last_message_id = last_message_id;
+            conv.last_message_text = last_message_text;
+            conv.last_message_timestamp = last_message_timestamp;
+        }
+        Ok(())
+    }
+
+    async fn store_message(&self, message: MessageItem) -> anyhow::Result<()> {
+        let mut inner = self.inner.lock().await;
+
+        // Store the message
         let conversation_messages = inner
             .messages
             .entry(message.conversation_id.clone())
             .or_insert_with(BTreeMap::new);
-        // Insert the message and check if it was already present
-        // If the message is new, update unread count accordingly
-        // Return the updated unread count
-        match conversation_messages.insert(message.message_id, message.clone()) {
-            Some(_) => match inner.conversations.get(&message.conversation_id) {
-                Some(con) => Ok(con.unread_count),
-                None => anyhow::bail!("conversation {} not found", message.conversation_id),
-            },
-            None => {
-                let profile_user_id = inner.user_profile.as_ref().unwrap().user_id;
-                match inner.conversations.get_mut(&message.conversation_id) {
-                    Some(conv) => {
-                        if profile_user_id == message.receiver_id {
-                            conv.unread_count += 1;
-                            Ok(conv.unread_count)
-                        } else {
-                            Ok(0)
-                        }
-                    }
-                    None => anyhow::bail!("conversation {} not found", message.conversation_id),
-                }
+        conversation_messages.insert(message.message_id.clone(), message.clone());
+
+        // Update conversation's last_message_id if this message is newer
+        if let Some(conv) = inner.conversations.get_mut(&message.conversation_id) {
+            let should_update = match &conv.last_message_id {
+                Some(existing_id) => message.message_id > *existing_id,
+                None => true,
+            };
+            if should_update {
+                println!(
+                    "[StoreEngine] store_message: updating last_message_id from {:?} to {}",
+                    conv.last_message_id, message.message_id
+                );
+                conv.last_message_id = Some(message.message_id.clone());
             }
+        } else {
+            println!(
+                "[StoreEngine] store_message: conversation {} not found in store",
+                message.conversation_id
+            );
         }
+
+        Ok(())
+    }
+
+    async fn get_latest_message(
+        &self,
+        conversation_id: &str,
+    ) -> anyhow::Result<Option<MessageItem>> {
+        let inner = self.inner.lock().await;
+
+        let messages = match inner.messages.get(conversation_id) {
+            Some(msgs) => msgs,
+            None => {
+                return Ok(None);
+            }
+        };
+        Ok(messages.iter().rev().next().map(|(_, msg)| msg.clone()))
     }
 
     async fn get_latest_messages(
         &self,
         conversation_id: &str,
         limit: u32,
-    ) -> anyhow::Result<Vec<StorageMessageData>> {
+    ) -> anyhow::Result<Vec<MessageItem>> {
         let inner = self.inner.lock().await;
 
         let messages = match inner.messages.get(conversation_id) {
@@ -629,18 +707,13 @@ impl RippleStorage for MemoryStore {
                 return Ok(Vec::new());
             }
         };
-
-        // Use rev() to iterate from newest to oldest, then reverse back
-        let mut result: Vec<StorageMessageData> = messages
+        let mut result: Vec<MessageItem> = messages
             .iter()
             .rev()
             .take(limit as usize)
             .map(|(_, msg)| msg.clone())
             .collect();
-
-        // Reverse to maintain old-to-new order
         result.reverse();
-
         println!("[StoreEngine] Returning {} latest messages", result.len());
         Ok(result)
     }
@@ -648,9 +721,9 @@ impl RippleStorage for MemoryStore {
     async fn get_messages_before(
         &self,
         conversation_id: &str,
-        before_message_id: i64,
+        before_message_id: &str,
         limit: u32,
-    ) -> anyhow::Result<Vec<StorageMessageData>> {
+    ) -> anyhow::Result<Vec<MessageItem>> {
         let inner = self.inner.lock().await;
 
         let messages = match inner.messages.get(conversation_id) {
@@ -659,16 +732,207 @@ impl RippleStorage for MemoryStore {
                 return Ok(Vec::new());
             }
         };
-
-        let mut result: Vec<StorageMessageData> = messages
-            .range(..before_message_id)
-            .rev()
+        Ok(messages
+            .range(..before_message_id.to_string())
             .take(limit as usize)
             .map(|(_, msg)| msg.clone())
-            .collect();
+            .collect())
+    }
 
-        // Reverse to maintain old-to-new order
-        result.reverse();
-        Ok(result)
+    // User Groups implementations
+    async fn exist_user_groups(&self) -> anyhow::Result<bool> {
+        let inner = self.inner.lock().await;
+        Ok(!inner.user_groups.is_empty())
+    }
+
+    async fn apply_user_group_all(
+        &self,
+        groups: Vec<UserGroupData>,
+        version: &str,
+    ) -> anyhow::Result<()> {
+        let mut inner = self.inner.lock().await;
+        inner.user_groups.clear();
+        for group in groups {
+            inner.user_groups.insert(group.group_id.clone(), group);
+        }
+        inner.user_groups_version = Some(version.to_string());
+        Ok(())
+    }
+
+    async fn apply_user_group_action(
+        &self,
+        action: UserGroupStorageAction,
+        version: String,
+        need_result: bool,
+    ) -> anyhow::Result<Option<UserGroupData>> {
+        let mut inner = self.inner.lock().await;
+        inner.user_groups_version = Some(version);
+        match action {
+            UserGroupStorageAction::Upsert(group) => {
+                inner
+                    .user_groups
+                    .insert(group.group_id.clone(), group.clone());
+                if need_result {
+                    Ok(Some(group))
+                } else {
+                    Ok(None)
+                }
+            }
+            UserGroupStorageAction::UpdateName { group_id, name } => {
+                match inner.user_groups.get_mut(&group_id) {
+                    Some(group) => {
+                        group.group_name = name;
+                        if need_result {
+                            Ok(Some(group.clone()))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    None => Ok(None),
+                }
+            }
+            UserGroupStorageAction::UpdateAvatar { group_id, avatar } => {
+                match inner.user_groups.get_mut(&group_id) {
+                    Some(group) => {
+                        group.group_avatar = avatar;
+                        if need_result {
+                            Ok(Some(group.clone()))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    None => Ok(None),
+                }
+            }
+            UserGroupStorageAction::Delete { group_id } => {
+                inner.user_groups.remove(&group_id);
+                // Also remove group members when user quits a group
+                inner.group_members.remove(&group_id);
+                inner.group_member_versions.remove(&group_id);
+                Ok(None)
+            }
+        }
+    }
+
+    async fn get_all_user_groups(&self) -> anyhow::Result<Vec<UserGroupData>> {
+        let inner = self.inner.lock().await;
+        Ok(inner.user_groups.values().cloned().collect())
+    }
+
+    async fn get_user_group_version(&self) -> anyhow::Result<Option<String>> {
+        let inner = self.inner.lock().await;
+        Ok(inner.user_groups_version.clone())
+    }
+
+    async fn clear_all_user_groups(&self) -> anyhow::Result<()> {
+        let mut inner = self.inner.lock().await;
+        inner.user_groups.clear();
+        inner.user_groups_version = None;
+        Ok(())
+    }
+
+    // Group Members implementations
+    async fn exist_group_members(&self, group_id: &str) -> anyhow::Result<bool> {
+        let inner = self.inner.lock().await;
+        Ok(inner.group_members.contains_key(group_id))
+    }
+
+    async fn apply_group_member_all(
+        &self,
+        group_id: &str,
+        members: Vec<GroupMemberData>,
+        version: &str,
+    ) -> anyhow::Result<()> {
+        let mut inner = self.inner.lock().await;
+        let group_members = inner
+            .group_members
+            .entry(group_id.to_string())
+            .or_insert_with(HashMap::new);
+        group_members.clear();
+        for member in members {
+            group_members.insert(member.user_id.clone(), member);
+        }
+        inner
+            .group_member_versions
+            .insert(group_id.to_string(), version.to_string());
+        Ok(())
+    }
+
+    async fn apply_group_member_action(
+        &self,
+        group_id: &str,
+        action: GroupMemberStorageAction,
+        version: String,
+        need_result: bool,
+    ) -> anyhow::Result<Option<GroupMemberData>> {
+        let mut inner = self.inner.lock().await;
+        inner
+            .group_member_versions
+            .insert(group_id.to_string(), version);
+        let group_members = inner
+            .group_members
+            .entry(group_id.to_string())
+            .or_insert_with(HashMap::new);
+
+        match action {
+            GroupMemberStorageAction::Upsert(member) => {
+                group_members.insert(member.user_id.clone(), member.clone());
+                if need_result {
+                    Ok(Some(member))
+                } else {
+                    Ok(None)
+                }
+            }
+            GroupMemberStorageAction::UpdateName { user_id, name } => {
+                match group_members.get_mut(&user_id) {
+                    Some(member) => {
+                        member.name = name;
+                        if need_result {
+                            Ok(Some(member.clone()))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    None => Ok(None),
+                }
+            }
+            GroupMemberStorageAction::UpdateAvatar { user_id, avatar } => {
+                match group_members.get_mut(&user_id) {
+                    Some(member) => {
+                        member.avatar = avatar;
+                        if need_result {
+                            Ok(Some(member.clone()))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    None => Ok(None),
+                }
+            }
+            GroupMemberStorageAction::Delete { user_id } => {
+                group_members.remove(&user_id);
+                Ok(None)
+            }
+        }
+    }
+
+    async fn get_all_group_members(&self, group_id: &str) -> anyhow::Result<Vec<GroupMemberData>> {
+        let inner = self.inner.lock().await;
+        match inner.group_members.get(group_id) {
+            Some(members) => Ok(members.values().cloned().collect()),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    async fn get_group_member_version(&self, group_id: &str) -> anyhow::Result<Option<String>> {
+        let inner = self.inner.lock().await;
+        Ok(inner.group_member_versions.get(group_id).cloned())
+    }
+
+    async fn clear_group_members(&self, group_id: &str) -> anyhow::Result<()> {
+        let mut inner = self.inner.lock().await;
+        inner.group_members.remove(group_id);
+        inner.group_member_versions.remove(group_id);
+        Ok(())
     }
 }

@@ -1,94 +1,103 @@
 import { onMounted, onUnmounted } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { RelationUpdateEvent } from '../types/relations';
-import { RelationAction } from '../types/relations';
+import type {
+  RelationInsertedEvent,
+  RelationUpdatedEvent,
+  RelationDeletedEvent,
+  RelationUser
+} from '../types/relations';
 
 /**
- * Composable for listening to relation update events from Rust backend
+ * Event handlers for relation operations
+ */
+export interface RelationEventHandlers {
+  onInsert: (user: RelationUser) => void;
+  onUpdate: (user: RelationUser) => void;
+  onDelete: (userId: string) => void;
+  onClearAll: () => void;
+}
+
+/**
+ * Composable for listening to relation events from Rust backend
  *
- * IMPORTANT: Event listener is registered in onMounted() with await to ensure
- * it's fully ready before any events can be emitted. This prevents race conditions.
- *
- * Architecture:
- * 1. Component mounts
- * 2. onMounted() executes
- * 3. await listen() - blocks until listener is registered
- * 4. Listener is now ready to receive events
- * 5. User actions trigger Rust events
- * 6. Events are reliably received and processed
+ * Listens to four separate events:
+ * - relation-inserted: New relation created (friend added, user blocked)
+ * - relation-updated: Existing relation modified (friend → blocked, profile updated)
+ * - relation-deleted: Relation removed (unfriend, unblock)
+ * - relations-cleared-all: All relations cleared
  *
  * Usage:
  * ```typescript
- * useRelationEvents((event) => {
- *   console.log('Received event:', event);
- *   // Handle the event...
+ * useRelationEvents({
+ *   onInsert: (user) => { ... },
+ *   onUpdate: (user) => { ... },
+ *   onDelete: (userId) => { ... },
+ *   onClearAll: () => { ... },
  * });
  * ```
  *
- * @param onEvent Callback function to handle relation update events
+ * @param handlers - Object containing handler functions for each event type
  */
-export function useRelationEvents(
-  onEvent: (event: RelationUpdateEvent) => void
-) {
-  let unlistenFn: UnlistenFn | null = null;
+export function useRelationEvents(handlers: RelationEventHandlers) {
+  const unlistenFns: UnlistenFn[] = [];
 
   onMounted(async () => {
     try {
-      // ✅ CRITICAL: await ensures listener is fully registered before proceeding
-      unlistenFn = await listen<RelationUpdateEvent>(
-        'relation-updated',
+      // Listen to relation-inserted event
+      const unlistenInsert = await listen<RelationInsertedEvent>(
+        'relation-inserted',
         (tauriEvent) => {
-          const event = tauriEvent.payload;
-
-          // Validate that action is a valid RelationAction
-          if (!isValidRelationAction(event.action)) {
-            console.warn(
-              '[useRelationEvents] Received invalid action code:',
-              event.action
-            );
-            return;
-          }
-
-          // Log event for debugging
-          console.log('[useRelationEvents] Received event:', {
-            action: RelationAction[event.action],
-            userId: event.userProfile?.userId,
-            flags: event.userProfile?.relationFlags,
+          console.log('[useRelationEvents] Received insert:', {
+            userId: tauriEvent.payload.userId,
+            flags: tauriEvent.payload.relationFlags,
           });
-
-          // Call the handler
-          onEvent(event);
+          handlers.onInsert(tauriEvent.payload);
         }
       );
+      unlistenFns.push(unlistenInsert);
 
-      console.log('[useRelationEvents] Event listener registered');
+      // Listen to relation-updated event
+      const unlistenUpdate = await listen<RelationUpdatedEvent>(
+        'relation-updated',
+        (tauriEvent) => {
+          console.log('[useRelationEvents] Received update:', {
+            userId: tauriEvent.payload.userId,
+            flags: tauriEvent.payload.relationFlags,
+          });
+          handlers.onUpdate(tauriEvent.payload);
+        }
+      );
+      unlistenFns.push(unlistenUpdate);
+
+      // Listen to relation-deleted event
+      const unlistenDelete = await listen<RelationDeletedEvent>(
+        'relation-deleted',
+        (tauriEvent) => {
+          console.log('[useRelationEvents] Received delete:', tauriEvent.payload);
+          handlers.onDelete(tauriEvent.payload);
+        }
+      );
+      unlistenFns.push(unlistenDelete);
+
+      // Listen to relations-cleared-all event
+      const unlistenClearAll = await listen<void>(
+        'relations-cleared-all',
+        () => {
+          console.log('[useRelationEvents] Received clear all');
+          handlers.onClearAll();
+        }
+      );
+      unlistenFns.push(unlistenClearAll);
+
+      console.log('[useRelationEvents] All listeners registered');
     } catch (error) {
-      console.error('[useRelationEvents] Failed to register event listener:', error);
+      console.error('[useRelationEvents] Failed to register event listeners:', error);
     }
   });
 
   // Cleanup on unmount
   onUnmounted(() => {
-    if (unlistenFn) {
-      unlistenFn();
-      console.log('[useRelationEvents] Event listener unregistered');
-    }
+    unlistenFns.forEach((fn) => fn());
+    console.log('[useRelationEvents] All listeners unregistered');
   });
-}
-
-/**
- * Validate that a numeric action code is a valid RelationAction
- */
-function isValidRelationAction(action: number): action is RelationAction {
-  const validActions = [
-    RelationAction.ADD_FRIEND,
-    RelationAction.REMOVE_FRIEND,
-    RelationAction.UPDATE_FRIEND,
-    RelationAction.ADD_BLOCK,
-    RelationAction.REMOVE_BLOCK,
-    RelationAction.BLOCK_FRIEND,
-    RelationAction.UNBLOCK_TO_FRIEND,
-    RelationAction.CLEAR,
-  ];
-  return validActions.includes(action as RelationAction);
 }

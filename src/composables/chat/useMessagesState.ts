@@ -23,7 +23,10 @@ export function useMessagesState() {
       conversationId: uiMessage.conversationId,
       senderId: uiMessage.senderId,
       sendTimestamp: uiMessage.timestamp,
-      textContent: uiMessage.content,
+      messageType: uiMessage.messageType ?? 1, // Default to single message if not provided
+      text: uiMessage.content,
+      commandType: uiMessage.commandType,
+      commandData: uiMessage.commandData,
     };
   }
 

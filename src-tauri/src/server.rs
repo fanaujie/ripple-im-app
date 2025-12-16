@@ -1,7 +1,7 @@
 use crate::app_config::AppConfig;
 use crate::ripple_api::RippleApi;
 use crate::ripple_syncer::default_event_emitter::DefaultEventEmitter;
-use crate::ripple_syncer::incremental_sync_manager::IncrementalSyncManager;
+use crate::ripple_syncer::ripple_ws_sync_handler::RippleWsSyncHandler;
 use crate::ripple_syncer::DataSyncManager;
 use crate::ripple_ws::ripple_ws_manager::RippleWsManager;
 use crate::ripple_ws::sync_aware_ws_message_handler::SyncAwareWsMessageHandler;
@@ -20,7 +20,7 @@ use tokio::net::ToSocketAddrs;
 use tokio::task::JoinHandle;
 
 type SyncerAwareMsgHandlerType =
-    SyncAwareWsMessageHandler<IncrementalSyncManager<DefaultStoreEngine, DefaultEventEmitter>>;
+    SyncAwareWsMessageHandler<RippleWsSyncHandler<DefaultStoreEngine, DefaultEventEmitter>>;
 
 type WsManagerType = RippleWsManager<SyncerAwareMsgHandlerType>;
 
@@ -163,11 +163,9 @@ async fn handler(
                 return Html(load_html_file(&api_state.app_handle, AuthSuccessRestart).await);
             }
 
-            // Start WebSocket and syncer in background
+            // Start WebSocket in background (ws_manager.start() internally calls start_syncer())
             tauri::async_runtime::spawn(async move {
                 let ws_manager = app_handle.state::<WsManagerType>();
-                let syncer = app_handle.state::<SyncerAwareMsgHandlerType>();
-                syncer.start_syncer().await.unwrap();
                 let config = app_handle.state::<AppConfig>();
                 ws_manager.start(&config.ws_gateway_url).await.unwrap();
             });

@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Message } from '../../types/chat';
+import type { Message, MessageFromBackend } from '../../types/chat';
+import { convertBackendMessage } from '../../types/chat';
 
 /**
  * Composable for chat-related actions (commands to Rust backend)
@@ -19,20 +20,23 @@ export function useChatActions() {
    * @param conversationId - Target conversation ID
    * @param receiverId - Receiver's user ID
    * @param content - Message text content
+   * @param groupId - Group ID for group chats (optional)
    * @returns Promise resolving to the message ID
    */
   async function sendMessage(
     senderId: string,
     conversationId: string,
-    receiverId: string,
-    content: string
+    receiverId: string | null,
+    content: string,
+    groupId: string | null = null
   ): Promise<string> {
     try {
       const messageId = await invoke<string>('send_message', {
         senderId,
         conversationId,
         receiverId,
-        textContent: content,
+        groupId,
+        text: content,
         fileUrl: null,
         fileName: null,
       });
@@ -143,23 +147,30 @@ export function useChatActions() {
    *
    * @param conversationId - Conversation ID
    * @param limit - Number of messages to load (default: 50)
+   * @param lastReadMessageId - Last read message ID for cache optimization (empty string for first visit)
    * @returns Promise resolving to array of latest messages
    */
   async function loadLatestMessages(
     conversationId: string,
-    limit: number = 50
+    limit: number = 50,
+    lastReadMessageId: string = ''
   ): Promise<Message[]> {
     try {
       console.log(
-        `[useChatActions] Loading latest ${limit} messages for conversation: ${conversationId}`
+        `[useChatActions] Loading latest ${limit} messages for conversation: ${conversationId}`,
+        lastReadMessageId ? `(last_read: ${lastReadMessageId})` : '(first visit)'
       );
 
-      const result = await invoke<{ messages: Message[] }>('read_latest_messages', {
+      const result = await invoke<{ messages: MessageFromBackend[] }>('read_latest_messages', {
         conversationId,
         readSize: limit,
+        lastReadMessageId,
       });
 
-      const { messages } = result;
+      const { messages: backendMessages } = result;
+      // Convert backend messages (UTC seconds string) to frontend messages (milliseconds number)
+      const messages = backendMessages.map(convertBackendMessage);
+
       console.log(
         `[useChatActions] Loaded ${messages.length} latest messages for ${conversationId}`
       );
@@ -189,13 +200,16 @@ export function useChatActions() {
         `[useChatActions] Loading ${limit} messages before ID ${beforeMessageId} for conversation: ${conversationId}`
       );
 
-      const result = await invoke<{ messages: Message[] }>('read_messages_before', {
+      const result = await invoke<{ messages: MessageFromBackend[] }>('read_messages_before', {
         conversationId,
         beforeMessageId,
         readSize: limit,
       });
 
-      const { messages } = result;
+      const { messages: backendMessages } = result;
+      // Convert backend messages (UTC seconds string) to frontend messages (milliseconds number)
+      const messages = backendMessages.map(convertBackendMessage);
+
       console.log(
         `[useChatActions] Loaded ${messages.length} older messages for ${conversationId}`
       );

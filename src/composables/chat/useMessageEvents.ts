@@ -5,21 +5,22 @@ import type { MessageUpdateEvent } from '../../types/chat';
 /**
  * Composable for listening to message update events from Rust backend
  *
- * Processes all message events and stores them in the appropriate conversation
+ * Only processes message events for the currently active conversation
+ * to optimize memory usage and performance
  *
  * Usage:
  * ```ts
  * useMessageEvents(selectedConversationId, (event) => {
- *   // Handle message update for any conversation
+ *   // Handle message update for active conversation only
  *   messagesState.handleEvent(event);
  * });
  * ```
  *
- * @param activeConversationId - Reactive ref to the currently active conversation ID (kept for compatibility)
- * @param onEvent - Callback function to handle message updates
+ * @param activeConversationId - Reactive ref to the currently active conversation ID
+ * @param onEvent - Callback function to handle message updates (only called for active conversation)
  */
 export function useMessageEvents(
-  _activeConversationId: Ref<string | null>,
+  activeConversationId: Ref<string | null>,
   onEvent: (event: MessageUpdateEvent) => void
 ) {
   let unlistenFn: UnlistenFn | null = null;
@@ -33,11 +34,17 @@ export function useMessageEvents(
         messageId: payload.message?.messageId,
         conversationId: payload.message?.conversationId,
         action: payload.action,
+        activeConversation: activeConversationId.value,
       });
 
-      // Process all messages regardless of active conversation
-      // Messages are automatically stored in the correct conversation by conversationId
-      onEvent(payload);
+      // Only process messages for the currently active conversation
+      // This optimizes memory usage by not storing messages for inactive conversations
+      if (payload.message?.conversationId === activeConversationId.value) {
+        console.log('[useMessageEvents] Processing message for active conversation');
+        onEvent(payload);
+      } else {
+        console.log('[useMessageEvents] Ignoring message for inactive conversation');
+      }
     });
 
     console.log('[useMessageEvents] Listener registered');

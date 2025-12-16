@@ -5,27 +5,28 @@ use futures_channel::mpsc::UnboundedSender;
 use futures_util::StreamExt;
 use prost::Message as ProstMessage;
 use ripple_proto::ripple_pb;
+use ripple_proto::ripple_pb::push_message_request::Payload;
 use ripple_proto::ripple_pb::ws_message::MessageType;
-use ripple_proto::ripple_pb::PushMessageType;
+use ripple_proto::ripple_pb::PushEventType;
 use std::sync::Arc;
 use tokio::sync::watch::Sender;
 use tokio::sync::{watch, Mutex};
 use tokio_tungstenite::tungstenite::Message;
 
 pub struct PushNotification {
-    pub push_message_type: PushMessageType,
+    pub event_type: PushEventType,
     pub send_user_id: i64,
     pub receive_user_id: i64,
-    pub request_device_id: String,
+    pub receive_device_id: String,
 }
 
 impl PushNotification {
-    fn new(msg_type: i32, push_req: ripple_pb::PushMessageRequest) -> Self {
+    fn new(event_type: i32, push_req: &ripple_pb::PushMessageRequest) -> Self {
         PushNotification {
-            push_message_type: PushMessageType::try_from(msg_type).unwrap(),
+            event_type: PushEventType::try_from(event_type).unwrap(),
             send_user_id: push_req.send_user_id.parse().unwrap_or(0),
             receive_user_id: push_req.receive_user_id.parse().unwrap_or(0),
-            request_device_id: push_req.request_device_id,
+            receive_device_id: push_req.receive_device_id.clone(),
         }
     }
 }
@@ -133,13 +134,16 @@ where
         mut watch_rx: watch::Receiver<bool>,
     ) {
         tauri::async_runtime::spawn(async move {
+            println!("[spawn_message_update_handler] Handler started, waiting for messages...");
             loop {
                 tokio::select! {
                     Some(push_req) = receiver.next() => {
+                        println!("[spawn_message_update_handler] Received message, calling handle_message_update_sync");
                         syncer.handle_message_update_sync(push_req).await;
                     }
                     _ = watch_rx.changed() => {
                         if *watch_rx.borrow() == true {
+                            println!("[spawn_message_update_handler] Received stop signal, breaking loop");
                             break;
                         }
                     }
@@ -214,49 +218,70 @@ where
             if let Ok(ws) = ripple_pb::WsMessage::decode(message.into_data()) {
                 match ws.message_type {
                     Some(MessageType::PushMessageRequest(push_message)) => {
-                        for msg_type in &push_message.push_message_type {
-                            println!("PushMessageType: {:?}", msg_type);
-                            match ripple_pb::PushMessageType::try_from(*msg_type) {
-                                Ok(ripple_pb::PushMessageType::SelfInfoUpdate) => {
-                                    if let Some(sender) =
-                                        &self.inner.lock().await.self_update_sender
-                                    {
-                                        let _ = sender.unbounded_send(PushNotification::new(
-                                            *msg_type,
-                                            push_message.clone(),
-                                        ));
+                        match &push_message.payload {
+                            Some(Payload::EventPayload(event_payload)) => {
+                                // Handle event notifications (sync triggers)
+                                for event_type in &event_payload.event_types {
+                                    println!("GatewayEventType: {:?}", event_type);
+                                    match PushEventType::try_from(*event_type) {
+                                        Ok(PushEventType::SelfInfoUpdate) => {
+                                            if let Some(sender) =
+                                                &self.inner.lock().await.self_update_sender
+                                            {
+                                                let _ =
+                                                    sender.unbounded_send(PushNotification::new(
+                                                        *event_type,
+                                                        &push_message,
+                                                    ));
+                                            }
+                                        }
+                                        Ok(PushEventType::RelationUpdate) => {
+                                            if let Some(sender) =
+                                                &self.inner.lock().await.relation_update_sender
+                                            {
+                                                let _ =
+                                                    sender.unbounded_send(PushNotification::new(
+                                                        *event_type,
+                                                        &push_message,
+                                                    ));
+                                            }
+                                        }
+                                        Ok(PushEventType::ConversationUpdate) => {
+                                            if let Some(sender) =
+                                                &self.inner.lock().await.conversation_update_sender
+                                            {
+                                                let _ =
+                                                    sender.unbounded_send(PushNotification::new(
+                                                        *event_type,
+                                                        &push_message,
+                                                    ));
+                                            }
+                                        }
+                                        _ => {
+                                            eprintln!(
+                                                "Unexpected GatewayEventType: {}",
+                                                *event_type
+                                            );
+                                        }
                                     }
                                 }
-                                Ok(ripple_pb::PushMessageType::RelationInfoUpdate) => {
-                                    if let Some(sender) =
-                                        &self.inner.lock().await.relation_update_sender
-                                    {
-                                        let _ = sender.unbounded_send(PushNotification::new(
-                                            *msg_type,
-                                            push_message.clone(),
-                                        ));
-                                    }
+                            }
+                            Some(Payload::MessagePayload(message_payload)) => {
+                                // Handle message delivery
+                                println!(
+                                    "MessagePayload received: {:?}",
+                                    message_payload.message_type
+                                );
+                                if let Some(sender) = &self.inner.lock().await.message_update_sender
+                                {
+                                    println!("[SyncAwareWsMessageHandler] Sending to message_update_sender");
+                                    let _ = sender.unbounded_send(push_message.clone());
+                                } else {
+                                    eprintln!("[SyncAwareWsMessageHandler] message_update_sender is None, syncer not started?");
                                 }
-                                Ok(ripple_pb::PushMessageType::ConversationInfoUpdate) => {
-                                    if let Some(sender) =
-                                        &self.inner.lock().await.conversation_update_sender
-                                    {
-                                        let _ = sender.unbounded_send(PushNotification::new(
-                                            *msg_type,
-                                            push_message.clone(),
-                                        ));
-                                    }
-                                }
-                                Ok(ripple_pb::PushMessageType::SingleMessage) => {
-                                    if let Some(sender) =
-                                        &self.inner.lock().await.message_update_sender
-                                    {
-                                        let _ = sender.unbounded_send(push_message.clone());
-                                    }
-                                }
-                                _ => {
-                                    eprintln!("Unexpected PushMessageType: {}", *msg_type);
-                                }
+                            }
+                            None => {
+                                eprintln!("PushMessageRequest has no payload");
                             }
                         }
                     }

@@ -17,16 +17,51 @@ export function useRelationsState() {
   const relationsMap = ref<Map<string, RelationUser>>(new Map());
 
   /**
+   * Handle relation insert event (relation-inserted)
+   * Adds a new relation to the map
+   */
+  function handleInsert(user: RelationUser): void {
+    relationsMap.value.set(user.userId, user);
+    console.log('[useRelationsState] Inserted user:', user.userId, 'flags:', user.relationFlags);
+  }
+
+  /**
+   * Handle relation update event (relation-updated)
+   * Updates an existing relation, replacing it entirely
+   */
+  function handleUpdate(user: RelationUser): void {
+    relationsMap.value.set(user.userId, user);
+    console.log('[useRelationsState] Updated user:', user.userId, 'flags:', user.relationFlags);
+  }
+
+  /**
+   * Handle relation delete event (relation-deleted)
+   * Removes a relation by userId
+   */
+  function handleDelete(userId: string): void {
+    relationsMap.value.delete(userId);
+    console.log('[useRelationsState] Deleted user:', userId);
+  }
+
+  /**
+   * Handle clear all event (relations-cleared-all)
+   * Removes all relations
+   */
+  function handleClearAll(): void {
+    relationsMap.value.clear();
+    console.log('[useRelationsState] Cleared all relations');
+  }
+
+  /**
    * Handle a relation update event from the backend
-   * Simplified logic: just set or delete from the Map
+   * @deprecated Use separate handleInsert/handleUpdate/handleDelete/handleClearAll methods instead
    */
   function handleEvent(event: RelationUpdateEvent): void {
     const { action, userProfile: user } = event;
 
     // CLEAR action - reset everything
     if (action === RelationAction.CLEAR) {
-      relationsMap.value.clear();
-      console.log('[useRelationsState] Cleared all relations');
+      handleClearAll();
       return;
     }
 
@@ -41,13 +76,11 @@ export function useRelationsState() {
                       action === RelationAction.REMOVE_BLOCK;
 
     if (isRemoval) {
-      // Remove from map
-      relationsMap.value.delete(user.userId);
-      console.log('[useRelationsState] Removed user:', user.userId, 'action:', action);
+      handleDelete(user.userId);
     } else {
-      // Add or update in map (all other actions)
-      relationsMap.value.set(user.userId, user);
-      console.log('[useRelationsState] Updated user:', user.userId, 'action:', action, 'flags:', user.relationFlags);
+      // All add/update/block/unblock actions set the user in the map
+      // The relationFlags will determine how it's displayed
+      handleUpdate(user);
     }
   }
 
@@ -94,7 +127,11 @@ export function useRelationsState() {
     relationsMap,
     friends,
     blockedUsers,
-    handleEvent,
+    handleEvent, // @deprecated
+    handleInsert,
+    handleUpdate,
+    handleDelete,
+    handleClearAll,
     initialize,
   };
 }

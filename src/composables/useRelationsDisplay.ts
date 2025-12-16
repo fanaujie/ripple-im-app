@@ -5,7 +5,7 @@ import { useRelationEvents } from './useRelationEvents';
 import { useRelationsState } from './useRelationsState';
 
 interface UIRelationData {
-  relations: RelationUser[];
+  users: RelationUser[];
 }
 
 /**
@@ -29,10 +29,15 @@ export function useRelationsDisplay() {
   const searchQuery = ref('');
 
   // Use state management composable
-  const { friends, blockedUsers, relationsMap, handleEvent, initialize } = useRelationsState();
+  const { friends, blockedUsers, relationsMap, handleInsert, handleUpdate, handleDelete, handleClearAll, initialize } = useRelationsState();
 
-  // Set up event listener
-  useRelationEvents(handleEvent);
+  // Set up event listeners
+  useRelationEvents({
+    onInsert: handleInsert,
+    onUpdate: handleUpdate,
+    onDelete: handleDelete,
+    onClearAll: handleClearAll,
+  });
 
   /**
    * Initialize relations data from backend
@@ -46,9 +51,9 @@ export function useRelationsDisplay() {
       console.log('[useRelationsDisplay] Fetching initial data...');
       const data = await invoke<UIRelationData>('get_relations');
 
-      initialize(data.relations);
+      initialize(data.users);
       console.log(
-        `[useRelationsDisplay] Loaded ${data.relations.length} relations`
+        `[useRelationsDisplay] Loaded ${data.users.length} relations`
       );
     } catch (err) {
       console.error('[useRelationsDisplay] Failed to initialize relations:', err);

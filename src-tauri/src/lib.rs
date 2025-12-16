@@ -14,7 +14,7 @@ mod store_engine;
 use crate::ripple_api::RippleApi;
 use crate::ripple_syncer::DataSyncManager;
 use crate::ripple_syncer::DefaultEventEmitter;
-use crate::ripple_syncer::IncrementalSyncManager;
+use crate::ripple_syncer::RippleWsSyncHandler;
 use crate::ripple_ws::RippleWsManager;
 use crate::ripple_ws::SyncAwareWsMessageHandler;
 use app_config::AppConfig;
@@ -66,7 +66,7 @@ pub fn run() {
             );
             let data_sync = DataSyncManager::new(ripple_api.clone(), store);
             let emitter = DefaultEventEmitter::new(app.handle().clone());
-            let syncer = IncrementalSyncManager::new(data_sync.clone(), emitter);
+            let syncer = RippleWsSyncHandler::new(data_sync.clone(), emitter);
             let sync_aware_msg_handler = SyncAwareWsMessageHandler::new(syncer);
             let ws_manager =
                 RippleWsManager::new(sync_aware_msg_handler.clone(), data_sync.clone());
@@ -103,6 +103,12 @@ pub fn run() {
             commands::read_latest_messages,
             commands::read_messages_before,
             commands::mark_last_read_message_id,
+            commands::create_group,
+            commands::invite_members,
+            commands::get_group_members,
+            commands::update_group_name,
+            commands::update_group_avatar,
+            commands::leave_group,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -75,6 +75,28 @@ export interface ConversationDisplay extends ConversationItem {
 }
 
 /**
+ * Message Type enumeration
+ */
+export enum MessageType {
+  /** Single text/file message */
+  SINGLE = 1,
+  /** Group command message */
+  GROUP_COMMAND = 2,
+}
+
+/**
+ * Command Type enumeration for group commands
+ */
+export enum CommandType {
+  /** Member joined the group */
+  MEMBER_JOIN = 1,
+  /** Member left the group */
+  MEMBER_QUIT = 2,
+  /** Group info updated */
+  INFO_UPDATE = 3,
+}
+
+/**
  * Message represents a single chat message from API
  * Matches the Rust MessageItem structure (from read_messages API)
  */
@@ -89,14 +111,54 @@ export interface Message {
   receiverId?: string;
   /** ID of the group (for group chat) */
   groupId?: string;
-  /** Message timestamp (Unix timestamp in milliseconds) */
+  /** Message timestamp (Unix timestamp in milliseconds) - converted from UTC seconds */
   sendTimestamp: number;
+  /** Message type (1=single, 2=group command) */
+  messageType: number;
   /** Message text content */
-  textContent?: string;
+  text?: string;
   /** File URL if message contains file */
   fileUrl?: string;
   /** File name if message contains file */
   fileName?: string;
+  /** Command type for group commands (1=MEMBER_JOIN, 2=MEMBER_QUIT) */
+  commandType?: number;
+  /** Command data payload */
+  commandData?: string;
+}
+
+/**
+ * Message from backend (before timestamp conversion)
+ * Backend sends UTC seconds as string to avoid precision loss
+ */
+export interface MessageFromBackend {
+  messageId: string;
+  conversationId: string;
+  senderId: string;
+  receiverId?: string;
+  groupId?: string;
+  /** UTC timestamp in seconds (as string to preserve precision) */
+  sendTimestamp: string;
+  messageType: number;
+  text?: string;
+  fileUrl?: string;
+  fileName?: string;
+  commandType?: number;
+  commandData?: string;
+}
+
+/**
+ * Convert backend message (UTC seconds string) to frontend message (milliseconds number)
+ */
+export function convertBackendMessage(backendMsg: MessageFromBackend): Message {
+  // Parse UTC seconds string to number, then convert to milliseconds
+  const timestampSeconds = parseInt(backendMsg.sendTimestamp, 10);
+  const timestampMs = isNaN(timestampSeconds) ? 0 : timestampSeconds * 1000;
+
+  return {
+    ...backendMsg,
+    sendTimestamp: timestampMs,
+  };
 }
 
 /**
@@ -114,6 +176,12 @@ export interface UIMessageItem {
   content: string;
   /** Message timestamp (Unix timestamp in milliseconds) */
   timestamp: number;
+  /** Message type (1=single, 2=group command) */
+  messageType?: number;
+  /** Command type for group commands (1=MEMBER_JOIN, 2=MEMBER_QUIT, 3=INFO_UPDATE) */
+  commandType?: number;
+  /** Command data payload */
+  commandData?: string;
 }
 
 /**
@@ -125,12 +193,53 @@ export interface UIMessageItem {
  * 3. Changes are written to storage
  * 4. This event is emitted to frontend
  * 5. Frontend updates UI reactively
+ *
+ * @deprecated Use separate event types (ConversationInsertedEvent, ConversationUpdatedEvent, etc.) instead
  */
 export interface ConversationUpdateEvent {
   /** Action type indicating what kind of update this is */
   action: ConversationAction;
   /** Conversation data for the update (null for CLEAR action) */
   conversation: ConversationItem | null;
+}
+
+/**
+ * Event payload for conversation-inserted event
+ * Emitted when a new conversation is created
+ */
+export type ConversationInsertedEvent = ConversationItem;
+
+/**
+ * Event payload for conversation-updated event
+ * Emitted when an existing conversation is modified
+ */
+export type ConversationUpdatedEvent = ConversationItem;
+
+/**
+ * Event payload for conversations-deleted event
+ * Emitted when a conversation is deleted (ID only)
+ */
+export type ConversationDeletedEvent = string;
+
+/**
+ * Event payload for conversations-cleared-all event
+ * Emitted when all conversations are cleared (no data needed)
+ */
+export type ConversationClearedAllEvent = void;
+
+/**
+ * Event payload for conversation-received-new-message event
+ * Emitted when a new message arrives for a conversation (for preview update)
+ */
+export interface ConversationReceivedMessageEvent {
+  /** ID of the conversation that received the message */
+  conversationId: string;
+  /** Updated unread count for the conversation */
+  unreadCount: number;
+  /** Message content preview (text or description) */
+  message: string;
+  /** Message timestamp (UTC seconds as string) */
+  timestamp: string;
 }
 
 /**
@@ -207,4 +316,28 @@ export function sortConversationsByTime(
  */
 export function sortMessagesByMessageId(messages: Message[]): Message[] {
   return [...messages].sort((a, b) => a.messageId.localeCompare(b.messageId));
+}
+
+// ============================================================================
+// Group Creation Types
+// ============================================================================
+
+/**
+ * Parameters for creating a new group
+ */
+export interface CreateGroupParams {
+  /** ID of the user creating the group */
+  senderId: string;
+  /** Name of the group (1-100 characters) */
+  groupName: string;
+  /** Array of member user IDs (minimum 1 member) */
+  memberIds: string[];
+}
+
+/**
+ * Result from creating a group
+ */
+export interface CreateGroupResult {
+  /** ID of the newly created group */
+  groupId: string;
 }

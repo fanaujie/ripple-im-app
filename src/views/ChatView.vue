@@ -35,8 +35,20 @@
     <!-- Right: Chat Window or Empty State -->
     <div class="flex-1 flex flex-col bg-gray-50">
       <template v-if="selectedConversation || targetUserId">
-        <!-- Chat Header -->
-        <div class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <!-- Group Chat Header -->
+        <GroupChatHeader
+          v-if="isGroupChat && selectedConversation"
+          :group-name="selectedDisplayName"
+          :group-avatar="getConversationAvatar(selectedConversation) || undefined"
+          :member-count="groupMemberCount"
+          @invite-members="handleGroupAction('invite-members')"
+          @view-members="handleGroupAction('view-members')"
+          @edit-group="handleGroupAction('edit-group')"
+          @leave-group="handleGroupAction('leave-group')"
+        />
+
+        <!-- 1v1 Chat Header -->
+        <div v-else class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <div class="flex items-center gap-3">
             <img
               :src="selectedAvatarUrl"
@@ -91,34 +103,51 @@
           </div>
 
           <!-- Messages -->
-          <div
-            v-for="message in currentMessages"
-            :key="message.messageId"
-            :class="[
-              'flex items-end gap-2',
-              message.senderId === currentUserId ? 'justify-end' : 'justify-start',
-            ]"
-          >
-            <!-- Sent messages: timestamp on left, bubble on right -->
-            <template v-if="message.senderId === currentUserId">
-              <div class="text-xs text-gray-400 pb-1 whitespace-nowrap">
-                {{ formatMessageTime(message.sendTimestamp) }}
-              </div>
-              <div class="max-w-md px-4 py-2 rounded-2xl bg-blue-500 text-white">
-                <div>{{ message.textContent }}</div>
-              </div>
-            </template>
+          <template v-for="(message, index) in currentMessages" :key="message.messageId">
+            <!-- Date Separator -->
+            <div v-if="shouldShowDateSeparator(index)" class="flex justify-center py-2">
+              <span class="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+                {{ formatMessageDate(message.sendTimestamp) }}
+              </span>
+            </div>
 
-            <!-- Received messages: bubble on left, timestamp on right -->
-            <template v-else>
-              <div class="max-w-md px-4 py-2 rounded-2xl bg-white text-gray-900">
-                <div>{{ message.textContent }}</div>
-              </div>
-              <div class="text-xs text-gray-400 pb-1 whitespace-nowrap">
+            <!-- Command Message (group notifications) - use Number() to ensure type consistency -->
+            <div v-if="Number(message.messageType) === MessageType.GROUP_COMMAND">
+              <div class="text-center text-xs text-gray-400 mb-1">
                 {{ formatMessageTime(message.sendTimestamp) }}
               </div>
-            </template>
-          </div>
+              <CommandMessage :message="message" />
+            </div>
+
+            <!-- Regular Message -->
+            <div
+              v-else
+              :class="[
+                'flex items-end gap-2',
+                message.senderId === currentUserId ? 'justify-end' : 'justify-start',
+              ]"
+            >
+              <!-- Sent messages: timestamp on left, bubble on right -->
+              <template v-if="message.senderId === currentUserId">
+                <div class="text-xs text-gray-400 pb-1 whitespace-nowrap">
+                  {{ formatMessageTime(message.sendTimestamp) }}
+                </div>
+                <div class="max-w-md px-4 py-2 rounded-2xl bg-blue-500 text-white">
+                  <div>{{ message.text }}</div>
+                </div>
+              </template>
+
+              <!-- Received messages: bubble on left, timestamp on right -->
+              <template v-else>
+                <div class="max-w-md px-4 py-2 rounded-2xl bg-white text-gray-900">
+                  <div>{{ message.text }}</div>
+                </div>
+                <div class="text-xs text-gray-400 pb-1 whitespace-nowrap">
+                  {{ formatMessageTime(message.sendTimestamp) }}
+                </div>
+              </template>
+            </div>
+          </template>
         </div>
 
         <!-- Blocked User Notification (replaces input area) -->
@@ -163,6 +192,41 @@
         </div>
       </template>
     </div>
+
+    <!-- Group Dialogs -->
+    <InviteMembersDialog
+      :is-open="isInviteMembersDialogOpen"
+      :group-id="selectedConversation?.groupId || ''"
+      :group-name="selectedConversation?.name || ''"
+      :group-avatar="selectedConversation?.avatar || null"
+      :friends="friends"
+      :current-user-id="currentUserId"
+      @close="closeInviteMembersDialog"
+      @success="closeInviteMembersDialog"
+    />
+
+    <ViewMembersDialog
+      :is-open="isViewMembersDialogOpen"
+      :group-id="selectedConversation?.groupId || ''"
+      @close="closeViewMembersDialog"
+    />
+
+    <EditGroupDialog
+      :is-open="isEditGroupDialogOpen"
+      :group-id="selectedConversation?.groupId || ''"
+      :group-name="selectedDisplayName"
+      :current-user-id="currentUserId"
+      @close="closeEditGroupDialog"
+      @success="closeEditGroupDialog"
+    />
+
+    <LeaveGroupDialog
+      :is-open="isLeaveGroupDialogOpen"
+      :group-id="selectedConversation?.groupId || ''"
+      :group-name="selectedDisplayName"
+      @close="closeLeaveGroupDialog"
+      @success="handleLeaveGroupSuccess"
+    />
   </div>
 </template>
 
@@ -175,9 +239,16 @@ import { useRelationActions } from '../composables/useRelationActions';
 import { useUserProfileDisplay } from '../composables/useUserProfileDisplay';
 import { getConversationDisplayName, getConversationAvatar } from '../types/chat';
 import type { ConversationDisplay } from '../types/chat';
-import { formatMessageTime } from '../utils/dateFormat';
+import { MessageType } from '../types/chat';
+import { formatMessageTime, formatMessageDate } from '../utils/dateFormat';
 import ConversationItem from '../components/chat/ConversationItem.vue';
 import EmptyView from '../components/views/EmptyView.vue';
+import CommandMessage from '../components/chat/CommandMessage.vue';
+import GroupChatHeader from '../components/chat/GroupChatHeader.vue';
+import InviteMembersDialog from '../components/group/InviteMembersDialog.vue';
+import ViewMembersDialog from '../components/group/ViewMembersDialog.vue';
+import EditGroupDialog from '../components/group/EditGroupDialog.vue';
+import LeaveGroupDialog from '../components/group/LeaveGroupDialog.vue';
 import defaultAvatarUrl from '../assets/default-avatar.svg';
 
 defineOptions({
@@ -192,16 +263,21 @@ const { userProfile } = useUserProfileDisplay();
 const currentUserId = computed(() => userProfile.value?.userId || '');
 
 // Relations (for peer profiles)
-const { relationsMap } = useRelationsDisplay();
+const { relationsMap, friends } = useRelationsDisplay();
 
 // Relation actions (for banner actions)
 const { addFriend, blockUser } = useRelationActions();
+
+// Group dialog states
+const isInviteMembersDialogOpen = ref(false);
+const isViewMembersDialogOpen = ref(false);
+const isEditGroupDialogOpen = ref(false);
+const isLeaveGroupDialogOpen = ref(false);
 
 // Chat display (auto-initializes conversations via onMounted)
 const {
   conversations,
   loading,
-  loadLatestMessages,
   loadOlderMessages,
   sendMessage,
   markConversationRead,
@@ -251,6 +327,17 @@ const currentMessages = computed(() => {
   }
   return getConversationMessages(selectedConversation.value.conversationId);
 });
+
+// Check if we should show a date separator before this message
+function shouldShowDateSeparator(index: number): boolean {
+  if (index === 0) return true; // Always show for first message
+
+  const currentMsg = currentMessages.value[index];
+  const prevMsg = currentMessages.value[index - 1];
+
+  // Compare dates using formatted date string
+  return formatMessageDate(currentMsg.sendTimestamp) !== formatMessageDate(prevMsg.sendTimestamp);
+}
 
 // Selected conversation display
 const selectedDisplayName = computed(() => {
@@ -351,29 +438,42 @@ const isBlockedConversation = computed(() => {
   return isBlocked;
 });
 
+// Determine if current conversation is a group chat
+const isGroupChat = computed(() => {
+  return !!selectedConversation.value?.groupId;
+});
+
+// Get group member count
+const groupMemberCount = computed(() => {
+  // TODO: This will be populated from group members list
+  // For now, return 0 as placeholder
+  return 0;
+});
+
 // Select conversation
 async function selectConversation(conversation: ConversationDisplay) {
   selectedConversation.value = conversation;
 
-  // Update active conversation for message filtering
-  setActiveConversation(conversation.conversationId);
-
-  // Reset pagination state
-  hasMoreMessages.value = true;
-
-  // Load latest 50 messages
+  // Update active conversation (clears old messages, loads new ones with optimization)
   try {
-    await loadLatestMessages(conversation.conversationId, 50);
+    // setActiveConversation returns whether there might be more older messages
+    const mightHaveMore = await setActiveConversation(conversation.conversationId);
+    hasMoreMessages.value = mightHaveMore;
 
     // Scroll to bottom
     await nextTick();
     scrollToBottom();
 
-    // Mark as read
+    // Mark as read (with optimization to skip API if no new messages)
     const messages = currentMessages.value;
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
-      await markConversationRead(conversation.conversationId, lastMessage.messageId);
+      // Pass current last_read_message_id for optimization
+      await markConversationRead(
+        conversation.conversationId,
+        lastMessage.messageId,
+        conversation.lastReadMessageId
+      );
     }
   } catch (error) {
     console.error('Failed to select conversation:', error);
@@ -394,10 +494,13 @@ async function handleSend() {
   const content = messageInput.value.trim();
   // Use empty string for conversationId when starting new conversation
   const conversationId = selectedConversation.value?.conversationId || '';
-  const receiverId = selectedConversation.value?.peerId || targetUserId.value || '';
+  // For group chats: receiverId is null, groupId is set
+  // For direct chats: receiverId is set, groupId is null
+  const groupId = selectedConversation.value?.groupId || null;
+  const receiverId = groupId ? null : (selectedConversation.value?.peerId || targetUserId.value || '');
 
   try {
-    await sendMessage(currentUserId.value, conversationId, receiverId, content);
+    await sendMessage(currentUserId.value, conversationId, receiverId, content, groupId);
     messageInput.value = '';
 
     // Clear targetUserId after sending first message (conversation will be created server-side)
@@ -561,6 +664,50 @@ function onImageError(event: Event) {
   img.src = defaultAvatarUrl;
 }
 
+// Group dialog handlers
+function closeInviteMembersDialog() {
+  isInviteMembersDialogOpen.value = false;
+}
+
+function closeViewMembersDialog() {
+  isViewMembersDialogOpen.value = false;
+}
+
+function closeEditGroupDialog() {
+  isEditGroupDialogOpen.value = false;
+}
+
+function closeLeaveGroupDialog() {
+  isLeaveGroupDialogOpen.value = false;
+}
+
+function handleLeaveGroupSuccess() {
+  console.log('[ChatView] Left group successfully');
+  // Clear selection since group no longer exists for this user
+  selectedConversation.value = null;
+  setActiveConversation(null);
+}
+
+// Handle group menu actions
+function handleGroupAction(action: string) {
+  if (!selectedConversation.value) return;
+
+  switch (action) {
+    case 'invite-members':
+      isInviteMembersDialogOpen.value = true;
+      break;
+    case 'view-members':
+      isViewMembersDialogOpen.value = true;
+      break;
+    case 'edit-group':
+      isEditGroupDialogOpen.value = true;
+      break;
+    case 'leave-group':
+      isLeaveGroupDialogOpen.value = true;
+      break;
+  }
+}
+
 // Conversations are automatically initialized by useChatDisplay on mount
 
 // Handle userId from route query parameter
@@ -587,6 +734,7 @@ function handleUserIdNavigation(userId: string) {
 }
 
 // Watch conversations array - handle pending userId when conversations load
+// Also sync selectedConversation when underlying data changes (e.g., name/avatar update)
 watch(conversations, () => {
   const userId = route.query.userId as string | undefined;
   if (userId && targetUserId.value === userId && !selectedConversation.value) {
@@ -594,6 +742,17 @@ watch(conversations, () => {
     const targetConversation = conversations.value.find(conv => conv.peerId === userId);
     if (targetConversation) {
       selectConversation(targetConversation);
+    }
+  }
+
+  // Sync selectedConversation with updated data from conversations array
+  if (selectedConversation.value) {
+    const updatedConversation = conversations.value.find(
+      conv => conv.conversationId === selectedConversation.value?.conversationId
+    );
+    if (updatedConversation) {
+      // Update the ref with the latest data (preserves reactivity for header/dialogs)
+      selectedConversation.value = updatedConversation;
     }
   }
 }, { deep: true });

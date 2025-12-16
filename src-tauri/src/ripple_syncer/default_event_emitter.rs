@@ -1,7 +1,7 @@
-use crate::ripple_api::api_response::{RelationUser, UserProfileData};
+use crate::ripple_api::api_response::{RelationUser, UserGroupData, UserProfileData};
 use crate::ripple_syncer::event_emitter::{EventEmitter, UIConversationItem, UIMessageItem};
 use crate::ripple_syncer::ui_event::{
-    ConversationUpdateEvent, MessageUpdateEvent, RelationsUpdateEvent, UIEvent,
+    ConversationReceivedMessageEvent, MessageUpdateEvent, UIEvent,
 };
 use tauri::{AppHandle, Emitter};
 
@@ -24,52 +24,91 @@ impl EventEmitter for DefaultEventEmitter {
             .map_err(|e| anyhow::anyhow!("Failed to emit user profile updated event: {}", e))
     }
 
-    fn emit_relation_updated(&self, action: i32, user: Option<RelationUser>) -> anyhow::Result<()> {
-        println!("Emitting relation updated event: action={}", action);
-        let event = RelationsUpdateEvent {
-            action,
-            user_profile: user,
-        };
+    fn emit_relation_insert(&self, user: RelationUser) -> anyhow::Result<()> {
+        println!("Emitting relation insert event");
         self.app_handle
-            .emit(UIEvent::RelationUpdated.to_string().as_str(), &event)
+            .emit(UIEvent::RelationInserted.to_string().as_str(), &user)
+            .map_err(|e| anyhow::anyhow!("Failed to emit relation insert event: {}", e))
+    }
+
+    fn emit_relation_update(&self, user: RelationUser) -> anyhow::Result<()> {
+        println!("Emitting relation updated event");
+        self.app_handle
+            .emit(UIEvent::RelationUpdated.to_string().as_str(), &user)
             .map_err(|e| anyhow::anyhow!("Failed to emit relation updated event: {}", e))
     }
 
-    fn emit_relations_cleared(&self) -> anyhow::Result<()> {
-        println!("Emitting relations cleared event");
-        let event = RelationsUpdateEvent {
-            action: -1, // CLEAR action
-            user_profile: None,
-        };
+    fn emit_relation_delete(&self, user_id: String) -> anyhow::Result<()> {
+        println!("Emitting relation deleted event");
         self.app_handle
-            .emit(UIEvent::RelationUpdated.to_string().as_str(), &event)
+            .emit(UIEvent::RelationDeleted.to_string().as_str(), &user_id)
+            .map_err(|e| anyhow::anyhow!("Failed to emit relation deleted event: {}", e))
+    }
+
+    fn emit_relations_clear_all(&self) -> anyhow::Result<()> {
+        println!("Emitting relations cleared event");
+        self.app_handle
+            .emit(UIEvent::RelationClearedAll.to_string().as_str(), &())
             .map_err(|e| anyhow::anyhow!("Failed to emit relations cleared event: {}", e))
     }
 
-    fn emit_conversation_updated(
-        &self,
-        action: i32,
-        conversation: Option<UIConversationItem>,
-    ) -> anyhow::Result<()> {
-        println!("Emitting conversation updated event: action={}", action);
-        let event = ConversationUpdateEvent {
-            action,
-            conversation,
-        };
+    fn emit_conversation_insert(&self, conversation: UIConversationItem) -> anyhow::Result<()> {
+        println!("Emitting conversation insert event");
         self.app_handle
-            .emit(UIEvent::ConversationUpdated.to_string().as_str(), &event)
-            .map_err(|e| anyhow::anyhow!("Failed to emit conversation updated event: {}", e))
+            .emit(
+                UIEvent::ConversationInserted.to_string().as_str(),
+                &conversation,
+            )
+            .map_err(|e| anyhow::anyhow!("Failed to emit conversation insert event: {}", e))
     }
 
-    fn emit_conversations_cleared(&self) -> anyhow::Result<()> {
-        println!("Emitting conversations cleared event");
-        let event = ConversationUpdateEvent {
-            action: -1, // CLEAR action
-            conversation: None,
+    fn emit_conversation_update(&self, conversation: UIConversationItem) -> anyhow::Result<()> {
+        println!("Emitting conversation update event");
+        self.app_handle
+            .emit(
+                UIEvent::ConversationUpdated.to_string().as_str(),
+                conversation,
+            )
+            .map_err(|e| anyhow::anyhow!("Failed to emit conversation update event: {}", e))
+    }
+
+    fn emit_conversation_delete(&self, conversation_id: String) -> anyhow::Result<()> {
+        println!("Emitting conversation delete event");
+        self.app_handle
+            .emit(
+                UIEvent::ConversationsDeleted.to_string().as_str(),
+                &conversation_id,
+            )
+            .map_err(|e| anyhow::anyhow!("Failed to emit conversation delete event: {}", e))
+    }
+
+    fn emit_conversation_delete_all(&self) -> anyhow::Result<()> {
+        println!("Emitting conversation delete all event");
+        self.app_handle
+            .emit(UIEvent::ConversationsClearedAll.to_string().as_str(), &())
+            .map_err(|e| anyhow::anyhow!("Failed to emit conversation delete all event: {}", e))
+    }
+
+    fn emit_conversations_received(
+        &self,
+        conversation_id: String,
+        unread_count: i32,
+        message: String,
+        timestamp: String,
+    ) -> anyhow::Result<()> {
+        println!("Emitting conversations received event");
+        let event = ConversationReceivedMessageEvent {
+            conversation_id,
+            unread_count,
+            message,
+            timestamp,
         };
         self.app_handle
-            .emit(UIEvent::ConversationUpdated.to_string().as_str(), &event)
-            .map_err(|e| anyhow::anyhow!("Failed to emit conversations cleared event: {}", e))
+            .emit(
+                UIEvent::ConversationReceivedNewMessage.to_string().as_str(),
+                &event,
+            )
+            .map_err(|e| anyhow::anyhow!("Failed to emit conversations received event: {}", e))
     }
 
     fn emit_message_updated(
@@ -93,5 +132,33 @@ impl EventEmitter for DefaultEventEmitter {
         self.app_handle
             .emit(UIEvent::MessageUpdated.to_string().as_str(), &event)
             .map_err(|e| anyhow::anyhow!("Failed to emit messages cleared event: {}", e))
+    }
+
+    fn emit_user_group_insert(&self, group: UserGroupData) -> anyhow::Result<()> {
+        println!("Emitting user group insert event");
+        self.app_handle
+            .emit(UIEvent::UserGroupInserted.to_string().as_str(), &group)
+            .map_err(|e| anyhow::anyhow!("Failed to emit user group insert event: {}", e))
+    }
+
+    fn emit_user_group_update(&self, group: UserGroupData) -> anyhow::Result<()> {
+        println!("Emitting user group update event");
+        self.app_handle
+            .emit(UIEvent::UserGroupUpdated.to_string().as_str(), &group)
+            .map_err(|e| anyhow::anyhow!("Failed to emit user group update event: {}", e))
+    }
+
+    fn emit_user_group_delete(&self, group_id: String) -> anyhow::Result<()> {
+        println!("Emitting user group delete event");
+        self.app_handle
+            .emit(UIEvent::UserGroupDeleted.to_string().as_str(), &group_id)
+            .map_err(|e| anyhow::anyhow!("Failed to emit user group delete event: {}", e))
+    }
+
+    fn emit_user_groups_clear_all(&self) -> anyhow::Result<()> {
+        println!("Emitting user groups cleared all event");
+        self.app_handle
+            .emit(UIEvent::UserGroupsClearedAll.to_string().as_str(), &())
+            .map_err(|e| anyhow::anyhow!("Failed to emit user groups cleared all event: {}", e))
     }
 }

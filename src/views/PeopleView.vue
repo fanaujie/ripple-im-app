@@ -20,6 +20,17 @@
           Friends
         </button>
         <button
+          @click="activeTab = 'groups'"
+          :class="[
+            'py-4 px-2 font-medium ml-8 transition-colors border-b-2',
+            activeTab === 'groups'
+              ? 'text-blue-500 border-blue-500'
+              : 'text-gray-500 hover:text-gray-700 border-transparent'
+          ]"
+        >
+          Groups
+        </button>
+        <button
           @click="activeTab = 'blocked'"
           :class="[
             'py-4 px-2 font-medium ml-8 transition-colors border-b-2',
@@ -176,6 +187,119 @@
                 >
                   Cancel
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Groups Tab -->
+      <div v-if="activeTab === 'groups'">
+        <!-- Header with Create Group button -->
+        <div class="flex items-center justify-between mb-6">
+          <div class="relative flex-1 mr-4">
+            <HeroIcon name="magnifying-glass" className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              v-model="groupSearchQuery"
+              type="text"
+              placeholder="Search groups by name..."
+              class="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            />
+          </div>
+          <button
+            @click="openCreateGroupDialog"
+            class="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 whitespace-nowrap"
+          >
+            <HeroIcon name="plus" className="w-5 h-5" />
+            <span>Create Group</span>
+          </button>
+        </div>
+
+        <!-- Groups List -->
+        <div class="space-y-2">
+          <div v-if="loading" class="text-center py-16 text-gray-500">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+          </div>
+
+          <div v-else-if="filteredGroups.length === 0" class="text-center py-16 text-gray-500">
+            {{ groupSearchQuery ? 'No groups found' : 'No groups yet. Create one to get started!' }}
+          </div>
+
+          <div v-else v-for="group in filteredGroups" :key="group.groupId">
+            <!-- Group Card -->
+            <div class="bg-white rounded-lg p-4 border border-gray-100 hover:shadow-md transition-shadow">
+              <div class="flex items-center justify-between">
+                <!-- Left: Avatar and Info -->
+                <div class="flex items-center gap-3">
+                  <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center overflow-hidden">
+                    <img
+                      v-if="group.avatar"
+                      :src="getAvatarUrl(group.avatar)"
+                      :alt="group.name"
+                      class="w-full h-full object-cover"
+                      @error="onImageError"
+                    />
+                    <HeroIcon v-else name="user-group" className="w-6 h-6 text-blue-500" />
+                  </div>
+                  <div>
+                    <div class="font-medium text-gray-900">{{ group.name }}</div>
+                    <div class="text-sm text-gray-500">Group</div>
+                  </div>
+                </div>
+
+                <!-- Right: Menu Button -->
+                <div class="relative">
+                  <button
+                    @click.stop="toggleMenu(group.groupId)"
+                    class="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <HeroIcon name="more-vertical" className="w-5 h-5" />
+                  </button>
+
+                  <!-- Dropdown Menu -->
+                  <div
+                    v-if="showMenu === group.groupId"
+                    v-click-outside="() => showMenu = null"
+                    @click.stop
+                    class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg py-2 z-10"
+                  >
+                    <button
+                      @click.stop="handleGroupChat(group)"
+                      class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                    >
+                      <HeroIcon name="message-circle" className="w-4 h-4" />
+                      <span>Chat</span>
+                    </button>
+                    <button
+                      @click.stop="openInviteMembersDialog(group)"
+                      class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                    >
+                      <HeroIcon name="user-plus" className="w-4 h-4" />
+                      <span>Invite Members</span>
+                    </button>
+                    <button
+                      @click.stop="openViewMembersDialog(group)"
+                      class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                    >
+                      <HeroIcon name="users" className="w-4 h-4" />
+                      <span>View Members</span>
+                    </button>
+                    <button
+                      @click.stop="openEditGroupDialog(group)"
+                      class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                    >
+                      <HeroIcon name="edit-2" className="w-4 h-4" />
+                      <span>Edit Group Info</span>
+                    </button>
+                    <button
+                      @click.stop="openLeaveGroupDialog(group)"
+                      class="w-full px-4 py-2 text-left text-red-600 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                    >
+                      <HeroIcon name="log-out" className="w-4 h-4" />
+                      <span>Leave Group</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -363,16 +487,67 @@
         </div>
       </div>
     </div>
+
+    <!-- Group Dialogs -->
+    <CreateGroupDialog
+      :is-open="isCreateGroupDialogOpen"
+      :friends="friends"
+      :current-user-id="currentUserId"
+      @close="closeCreateGroupDialog"
+      @success="handleGroupCreated"
+    />
+
+    <InviteMembersDialog
+      :is-open="isInviteMembersDialogOpen"
+      :group-id="selectedGroup?.groupId || ''"
+      :group-name="selectedGroup?.name || ''"
+      :group-avatar="selectedGroup?.avatar || null"
+      :friends="friends"
+      :current-user-id="currentUserId"
+      @close="closeInviteMembersDialog"
+      @success="closeInviteMembersDialog"
+    />
+
+    <ViewMembersDialog
+      :is-open="isViewMembersDialogOpen"
+      :group-id="selectedGroup?.groupId || ''"
+      @close="closeViewMembersDialog"
+    />
+
+    <EditGroupDialog
+      :is-open="isEditGroupDialogOpen"
+      :group-id="selectedGroup?.groupId || ''"
+      :group-name="selectedGroup?.name || ''"
+      :current-user-id="currentUserId"
+      @close="closeEditGroupDialog"
+      @success="closeEditGroupDialog"
+    />
+
+    <LeaveGroupDialog
+      :is-open="isLeaveGroupDialogOpen"
+      :group-id="selectedGroup?.groupId || ''"
+      :group-name="selectedGroup?.name || ''"
+      @close="closeLeaveGroupDialog"
+      @success="handleLeaveGroupSuccess"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue';
+import { ref, nextTick, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import type { RelationUser } from '../types/relations';
 import HeroIcon from '../components/shared/HeroIcon.vue';
 import { useRelationsDisplay } from '../composables/useRelationsDisplay';
 import { useRelationActions } from '../composables/useRelationActions';
+import { useChatDisplay } from '../composables/chat/useChatDisplay';
+import { useGroupsDisplay, type GroupDisplayItem } from '../composables/useGroupsDisplay';
+import { useUserProfileDisplay } from '../composables/useUserProfileDisplay';
+import CreateGroupDialog from '../components/chat/CreateGroupDialog.vue';
+import InviteMembersDialog from '../components/group/InviteMembersDialog.vue';
+import ViewMembersDialog from '../components/group/ViewMembersDialog.vue';
+import EditGroupDialog from '../components/group/EditGroupDialog.vue';
+import LeaveGroupDialog from '../components/group/LeaveGroupDialog.vue';
 import defaultAvatarUrl from '../assets/default-avatar.svg';
 
 // Define component name for KeepAlive
@@ -380,7 +555,7 @@ defineOptions({
   name: 'PeopleView'
 });
 
-type TabType = 'friends' | 'blocked' | 'add';
+type TabType = 'friends' | 'groups' | 'blocked' | 'add';
 
 // Router
 const router = useRouter();
@@ -412,6 +587,8 @@ const confirmAction = ref<{
 const {
   friends: filteredFriends,
   blockedUsers: filteredBlockedUsers,
+  friends,
+  relationsMap,
   loading,
   searchQuery,
 } = useRelationsDisplay();
@@ -425,6 +602,100 @@ const {
   unblockUser,
   hideBlockedUser,
 } = useRelationActions();
+
+// User profile
+const { userProfile } = useUserProfileDisplay();
+const currentUserId = computed(() => userProfile.value?.userId || '');
+
+// Chat display for groups (need conversations to filter groups)
+const { conversations } = useChatDisplay(relationsMap);
+
+// Groups display
+const {
+  filteredGroups,
+  searchQuery: groupSearchQuery,
+} = useGroupsDisplay(conversations);
+
+// Group dialog states
+const isCreateGroupDialogOpen = ref(false);
+const isInviteMembersDialogOpen = ref(false);
+const isViewMembersDialogOpen = ref(false);
+const isEditGroupDialogOpen = ref(false);
+const isLeaveGroupDialogOpen = ref(false);
+const selectedGroup = ref<GroupDisplayItem | null>(null);
+
+// Group dialog handlers
+function openCreateGroupDialog() {
+  isCreateGroupDialogOpen.value = true;
+}
+
+function closeCreateGroupDialog() {
+  isCreateGroupDialogOpen.value = false;
+}
+
+function handleGroupCreated(groupId: string) {
+  console.log('[PeopleView] Group created:', groupId);
+  setTimeout(() => {
+    closeCreateGroupDialog();
+  }, 1000);
+}
+
+function openInviteMembersDialog(group: GroupDisplayItem) {
+  selectedGroup.value = group;
+  showMenu.value = null;
+  isInviteMembersDialogOpen.value = true;
+}
+
+function closeInviteMembersDialog() {
+  isInviteMembersDialogOpen.value = false;
+  selectedGroup.value = null;
+}
+
+function openViewMembersDialog(group: GroupDisplayItem) {
+  selectedGroup.value = group;
+  showMenu.value = null;
+  isViewMembersDialogOpen.value = true;
+}
+
+function closeViewMembersDialog() {
+  isViewMembersDialogOpen.value = false;
+  selectedGroup.value = null;
+}
+
+function openEditGroupDialog(group: GroupDisplayItem) {
+  selectedGroup.value = group;
+  showMenu.value = null;
+  isEditGroupDialogOpen.value = true;
+}
+
+function closeEditGroupDialog() {
+  isEditGroupDialogOpen.value = false;
+  selectedGroup.value = null;
+}
+
+function openLeaveGroupDialog(group: GroupDisplayItem) {
+  selectedGroup.value = group;
+  showMenu.value = null;
+  isLeaveGroupDialogOpen.value = true;
+}
+
+function closeLeaveGroupDialog() {
+  isLeaveGroupDialogOpen.value = false;
+  selectedGroup.value = null;
+}
+
+function handleLeaveGroupSuccess() {
+  console.log('[PeopleView] Left group successfully');
+}
+
+// Navigate to group chat
+function handleGroupChat(group: GroupDisplayItem) {
+  showMenu.value = null;
+  router.push({
+    path: '/chat',
+    query: { conversationId: group.conversationId }
+  });
+}
 
 // Avatar handling
 const getAvatarUrl = (avatarPath?: string) => {
