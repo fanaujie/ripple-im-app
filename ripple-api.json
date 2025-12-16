@@ -874,7 +874,7 @@
           "Groups"
         ],
         "summary": "Update group",
-        "description": "Update the name or avatar of a group",
+        "description": "Update the name of a group",
         "operationId": "updateGroup",
         "parameters": [
           {
@@ -1844,11 +1844,6 @@
             "type": "string",
             "description": "New name for the group",
             "example": "My Group"
-          },
-          "avatar": {
-            "type": "string",
-            "description": "New avatar URL for the group",
-            "example": "https://example.com/avatar.png"
           }
         },
         "required": [

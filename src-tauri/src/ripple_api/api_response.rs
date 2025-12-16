@@ -24,6 +24,19 @@ pub struct CommonResponse {
     pub message: String,
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct UploadImageData {
+    #[serde(rename = "avatarUrl")]
+    pub url: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct UploadImageResponse {
+    pub code: i32,
+    pub message: String,
+    pub data: Option<UploadImageData>,
+}
+
 // ==================== Profile Request Types ====================
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -578,8 +591,6 @@ pub struct UpdateGroupRequest {
     pub sender_id: String,
     #[serde(rename = "name", skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[serde(rename = "avatar", skip_serializing_if = "Option::is_none")]
-    pub avatar: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

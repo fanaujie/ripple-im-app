@@ -1,7 +1,8 @@
 #[derive(Clone)]
 pub struct ApiPaths {
-    // Pre-built full URLs
+    // Pre-built full URLs for upload gateway
     pub upload_avatar: String,
+    pub upload_group_avatar_base: String,
     // User profile paths
     pub my_profile: String,
     pub user_profile: String,
@@ -26,6 +27,7 @@ impl ApiPaths {
     pub fn new(upload_gateway_url: &str, api_gateway_url: &str) -> Self {
         Self {
             upload_avatar: format!("{}/api/upload/avatar", upload_gateway_url),
+            upload_group_avatar_base: format!("{}/api/upload/groups", upload_gateway_url),
             // User profile paths
             my_profile: format!("{}/api/users/me/profile", api_gateway_url),
             user_profile: format!("{}/api/users", api_gateway_url),

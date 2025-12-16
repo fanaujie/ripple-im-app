@@ -5,7 +5,8 @@ use crate::ripple_api::api_response::{
     GetGroupMembersResponse, GetUserGroupsResponse, GroupSyncResponse, InviteGroupMemberRequest,
     MessageResponse, ReadMessagesResponse, RelationsPageResponse, RelationsSyncResponse,
     SendMessageRequest, UpdateBlockedUserRequest, UpdateFriendRequest, UpdateGroupRequest,
-    UpdateProfileRequest, UpdateReadPositionRequest, UserGroupSyncResponse, UserProfileResponse,
+    UpdateProfileRequest, UpdateReadPositionRequest, UploadImageResponse, UserGroupSyncResponse,
+    UserProfileResponse,
 };
 use crate::ripple_api::oauth_client::OauthClient;
 use crate::store_engine::StoreEngine;
@@ -124,12 +125,13 @@ where
         }
     }
 
+    /// Upload avatar image and get the URL back
     pub async fn upload_avatar(
         &self,
         filename: String,
         mime: Mime,
         image_data: Vec<u8>,
-    ) -> anyhow::Result<CommonResponse> {
+    ) -> anyhow::Result<UploadImageResponse> {
         let res = self
             .execute_with_auth_retry(
                 |access_token| {
@@ -158,7 +160,51 @@ where
                 1,
             )
             .await?;
-        Ok(res.json::<CommonResponse>().await?)
+        Ok(res.json::<UploadImageResponse>().await?)
+    }
+
+    /// Upload group avatar image and get the URL back
+    pub async fn upload_group_avatar(
+        &self,
+        group_id: String,
+        filename: String,
+        mime: Mime,
+        image_data: Vec<u8>,
+    ) -> anyhow::Result<UploadImageResponse> {
+        let url = format!(
+            "{}/{}/avatar",
+            &self.api_paths.upload_group_avatar_base, group_id
+        );
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let image_data = image_data.clone();
+                    let hash = Sha256::digest(&image_data);
+                    let hex_hash = base16ct::lower::encode_string(&hash);
+                    let clone_filename = filename.clone();
+                    let clone_mime = mime.clone();
+                    let url = url.clone();
+                    async move {
+                        let part = reqwest::multipart::Part::bytes(image_data)
+                            .file_name(clone_filename.clone())
+                            .mime_str(clone_mime.to_string().as_str())?;
+                        let form = reqwest::multipart::Form::new()
+                            .text("hash", hex_hash)
+                            .text("originalFilename", clone_filename)
+                            .part("avatar", part);
+                        self.reqwest_client
+                            .put(&url)
+                            .header("Authorization", format!("Bearer {}", access_token))
+                            .multipart(form)
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to upload group avatar: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<UploadImageResponse>().await?)
     }
 
     // ==================== Profile APIs ====================
@@ -721,14 +767,9 @@ where
         group_id: String,
         sender_id: String,
         name: Option<String>,
-        avatar: Option<String>,
     ) -> anyhow::Result<CommonResponse> {
         let url = format!("{}/{}", &self.api_paths.groups, group_id);
-        let request_body = UpdateGroupRequest {
-            sender_id,
-            name,
-            avatar,
-        };
+        let request_body = UpdateGroupRequest { sender_id, name };
 
         let res = self
             .execute_with_auth_retry(

@@ -122,12 +122,15 @@ export function useGroupActions() {
   }
 
   /**
-   * Update group avatar
+   * Update group avatar by uploading a new image
+   * @param groupId Group ID
+   * @param uploadFilepath Path to the image file to upload
+   * @param cropRatio Crop ratio (0.0 = crop from top, 1.0 = crop from bottom)
    */
   async function updateGroupAvatar(
     groupId: string,
-    senderId: string,
-    groupAvatar: string
+    uploadFilepath: string,
+    cropRatio: number
   ): Promise<void> {
     try {
       loading.value = true;
@@ -135,8 +138,8 @@ export function useGroupActions() {
 
       await invoke<void>('update_group_avatar', {
         groupId,
-        senderId,
-        groupAvatar,
+        uploadFilepath,
+        cropRatio,
       });
 
       console.log('[useGroupActions] Group avatar updated successfully');

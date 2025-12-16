@@ -518,6 +518,7 @@
       :is-open="isEditGroupDialogOpen"
       :group-id="selectedGroup?.groupId || ''"
       :group-name="selectedGroup?.name || ''"
+      :group-avatar="selectedGroup?.avatar"
       :current-user-id="currentUserId"
       @close="closeEditGroupDialog"
       @success="closeEditGroupDialog"

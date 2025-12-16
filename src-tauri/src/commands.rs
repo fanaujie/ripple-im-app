@@ -69,28 +69,21 @@ pub async fn get_user_profile(
     }
 }
 
+/// Upload user avatar with crop position
+/// crop_ratio: 0.0 = crop from top, 1.0 = crop from bottom
 #[tauri::command]
 pub async fn update_user_avatar(
     app: AppHandle,
     upload_filepath: String,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
+    crop_ratio: f64,
 ) -> Result<(), errors::CommandError> {
     let ripple = app.state::<RippleApi<DefaultStoreEngine>>();
     let filepath = Path::new(&upload_filepath);
     let filename =
         FileUtils::get_file_name(filepath).ok_or(anyhow::anyhow!("Invalid file path"))?;
-    let crop_img = ImageProcessor::new().crop_image(
-        filepath,
-        x as u32,
-        y as u32,
-        width as u32,
-        height as u32,
-    )?;
+    let resized_img = ImageProcessor::new().resize_to_square(filepath, 460, crop_ratio)?;
     let res = ripple
-        .upload_avatar(filename.to_string(), crop_img.0, crop_img.1)
+        .upload_avatar(filename.to_string(), resized_img.0, resized_img.1)
         .await?;
     if res.code != 200 {
         return Err(errors::CommandError::RippleAPIError(
@@ -100,6 +93,38 @@ pub async fn update_user_avatar(
         ));
     }
     Ok(())
+}
+
+/// Upload an image file, resize it with crop position, and return the URL
+/// crop_ratio: 0.0 = crop from top, 1.0 = crop from bottom
+#[tauri::command]
+pub async fn upload_image(
+    app: AppHandle,
+    upload_filepath: String,
+    crop_ratio: f64,
+) -> Result<String, errors::CommandError> {
+    let ripple = app.state::<RippleApi<DefaultStoreEngine>>();
+    let filepath = Path::new(&upload_filepath);
+    let filename =
+        FileUtils::get_file_name(filepath).ok_or(anyhow::anyhow!("Invalid file path"))?;
+    let resized_img = ImageProcessor::new().resize_to_square(filepath, 460, crop_ratio)?;
+    let res = ripple
+        .upload_avatar(filename.to_string(), resized_img.0, resized_img.1)
+        .await?;
+    if res.code != 200 {
+        return Err(errors::CommandError::RippleAPIError(
+            "upload_image".to_string(),
+            res.code,
+            res.message,
+        ));
+    }
+    res.data
+        .map(|d| d.url)
+        .ok_or_else(|| errors::CommandError::RippleAPIError(
+            "upload_image".to_string(),
+            500,
+            "No URL returned".to_string(),
+        ))
 }
 
 #[tauri::command]
@@ -498,7 +523,7 @@ pub async fn update_group_name(
     ripple_api: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<(), errors::CommandError> {
     let response = ripple_api
-        .update_group(group_id, sender_id, Some(group_name), None)
+        .update_group(group_id, sender_id, Some(group_name))
         .await?;
     if response.code == 200 {
         Ok(())
@@ -511,26 +536,31 @@ pub async fn update_group_name(
     }
 }
 
+/// Upload group avatar with crop position
+/// crop_ratio: 0.0 = crop from top, 1.0 = crop from bottom
 #[tauri::command]
 pub async fn update_group_avatar(
+    app: AppHandle,
     group_id: String,
-    sender_id: String,
-    group_avatar: String,
-    ripple_api: State<'_, RippleApi<DefaultStoreEngine>>,
+    upload_filepath: String,
+    crop_ratio: f64,
 ) -> Result<(), errors::CommandError> {
-    let response = ripple_api
-        .update_group(group_id, sender_id, None, Some(group_avatar))
+    let ripple = app.state::<RippleApi<DefaultStoreEngine>>();
+    let filepath = Path::new(&upload_filepath);
+    let filename =
+        FileUtils::get_file_name(filepath).ok_or(anyhow::anyhow!("Invalid file path"))?;
+    let resized_img = ImageProcessor::new().resize_to_square(filepath, 460, crop_ratio)?;
+    let res = ripple
+        .upload_group_avatar(group_id, filename.to_string(), resized_img.0, resized_img.1)
         .await?;
-
-    if response.code == 200 {
-        Ok(())
-    } else {
-        Err(errors::CommandError::RippleAPIError(
+    if res.code != 200 {
+        return Err(errors::CommandError::RippleAPIError(
             "update_group_avatar".to_string(),
-            response.code,
-            response.message,
-        ))
+            res.code,
+            res.message,
+        ));
     }
+    Ok(())
 }
 
 #[tauri::command]

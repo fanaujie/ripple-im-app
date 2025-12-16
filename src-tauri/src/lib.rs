@@ -91,6 +91,7 @@ pub fn run() {
             commands::get_relations,
             commands::get_conversations,
             commands::update_user_avatar,
+            commands::upload_image,
             commands::update_user_nickname,
             commands::remove_user_avatar,
             commands::add_friend,

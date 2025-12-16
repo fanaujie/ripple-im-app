@@ -215,6 +215,7 @@
       :is-open="isEditGroupDialogOpen"
       :group-id="selectedConversation?.groupId || ''"
       :group-name="selectedDisplayName"
+      :group-avatar="selectedConversation?.avatar"
       :current-user-id="currentUserId"
       @close="closeEditGroupDialog"
       @success="closeEditGroupDialog"

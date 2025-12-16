@@ -1,0 +1,803 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ripple Upload Gateway",
+    "description": "File upload gateway for Ripple IM system, specialized in handling avatar and multimedia file uploads",
+    "contact": {
+      "name": "Ripple Team",
+      "email": "junjie725@gmail.com"
+    },
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:10003",
+      "description": "Development Environment"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "File Upload",
+      "description": "APIs for uploading avatars and multimedia files"
+    },
+    {
+      "name": "Message Attachment",
+      "description": "Message attachment upload APIs"
+    }
+  ],
+  "paths": {
+    "/api/upload/groups/{groupId}/avatar": {
+      "put": {
+        "tags": [
+          "File Upload"
+        ],
+        "summary": "Upload group avatar",
+        "description": "Upload and set group avatar, supports JPEG and PNG formats, file size limit 5MB, maximum resolution 460x460. Only group members can upload.",
+        "operationId": "uploadGroupAvatar",
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "description": "Group ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "hash": {
+                    "type": "string",
+                    "description": "SHA-256 hash value of the avatar file for integrity verification"
+                  },
+                  "originalFilename": {
+                    "type": "string",
+                    "description": "Original filename with extension (used to determine file extension)"
+                  },
+                  "avatar": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Avatar image file. Maximum file size: 5MB. Maximum resolution: 460x460 pixels."
+                  }
+                },
+                "required": [
+                  "avatar",
+                  "hash",
+                  "originalFilename"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully uploaded group avatar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unsupported file format, file size exceeds limit, file hash validation failed, or file resolution exceeds limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUploadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUploadResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden: Not a group member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUploadResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUploadResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/upload/avatar": {
+      "put": {
+        "tags": [
+          "File Upload"
+        ],
+        "summary": "Upload user avatar",
+        "description": "Upload and set user avatar, supports JPEG and PNG formats, file size limit 5MB, maximum resolution 460x460",
+        "operationId": "uploadUserAvatar",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "hash": {
+                    "type": "string",
+                    "description": "SHA-256 hash value of the avatar file for integrity verification"
+                  },
+                  "originalFilename": {
+                    "type": "string",
+                    "description": "Original filename with extension (used to determine file extension)"
+                  },
+                  "avatar": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Avatar image file. Maximum file size: 5MB. Maximum resolution: 460x460 pixels."
+                  }
+                },
+                "required": [
+                  "avatar",
+                  "hash",
+                  "originalFilename"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully uploaded avatar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unsupported file format, file size exceeds limit, file hash validation failed, or file resolution exceeds limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUploadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUploadResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUploadResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/upload/attachment/single": {
+      "put": {
+        "tags": [
+          "Message Attachment"
+        ],
+        "summary": "Simple upload",
+        "description": "Upload small files (\u003C5MB) in a single request. The file is verified using SHA256 hash and uploaded directly without chunking.",
+        "operationId": "singleUpload",
+        "parameters": [
+          {
+            "name": "objectName",
+            "in": "query",
+            "description": "Object name in storage (from initiate response)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "uploads/2025/01/abc123.png"
+          },
+          {
+            "name": "fileSha256",
+            "in": "query",
+            "description": "SHA256 hash of the file",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "File data"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingleAttachmentUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid file data or hash mismatch",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingleAttachmentUploadResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/upload/attachment/chunk": {
+      "put": {
+        "tags": [
+          "Message Attachment"
+        ],
+        "summary": "Upload chunk",
+        "description": "Upload a single chunk of the file during multipart upload. Each chunk is verified using SHA256 hash.",
+        "operationId": "uploadChunk",
+        "parameters": [
+          {
+            "name": "objectName",
+            "in": "query",
+            "description": "Object name in storage (from initiate response)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "uploads/2025/01/abc123.png"
+          },
+          {
+            "name": "chunkNumber",
+            "in": "query",
+            "description": "Chunk sequence number (starting from 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 1
+          },
+          {
+            "name": "chunkSha256",
+            "in": "query",
+            "description": "SHA256 hash of the chunk data",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "chunk": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Chunk file data"
+                  }
+                },
+                "required": [
+                  "chunk"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Chunk uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadChunkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid chunk data or hash mismatch",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadChunkResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to upload chunk to storage",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadChunkResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/upload/attachment/initiate": {
+      "post": {
+        "tags": [
+          "Message Attachment"
+        ],
+        "summary": "Initiate file upload",
+        "description": "Initialize file upload by providing file metadata. The server will determine if the file already exists (returns URL), requires single upload (\u003C5MB), or chunked upload (\u003E5MB).",
+        "operationId": "initiateUpload",
+        "requestBody": {
+          "description": "File metadata for upload initiation",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitiateUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Upload initiated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiateAttachmentUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiateAttachmentUploadResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/upload/attachment/chunk/complete": {
+      "post": {
+        "tags": [
+          "Message Attachment"
+        ],
+        "summary": "Complete upload",
+        "description": "Complete multipart upload by merging all chunks. Returns the final file URL.",
+        "operationId": "completeUpload",
+        "requestBody": {
+          "description": "Upload completion request with object name and total chunks",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Upload completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompleteAttachmentUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or missing chunks",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompleteAttachmentUploadResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to complete upload",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompleteAttachmentUploadResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/upload/attachment/abort": {
+      "delete": {
+        "tags": [
+          "Message Attachment"
+        ],
+        "summary": "Abort upload",
+        "description": "Cancel ongoing multipart upload and cleanup uploaded chunks. This should be called when the user cancels the upload or an error occurs.",
+        "operationId": "abortUpload",
+        "requestBody": {
+          "description": "Abort request with object name to cancel",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbortUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Upload aborted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbortAttachmentUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbortAttachmentUploadResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to abort upload",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbortAttachmentUploadResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AvatarUploadData": {
+        "type": "object",
+        "description": "Avatar upload data",
+        "properties": {
+          "avatarUrl": {
+            "type": "string",
+            "description": "URL of the uploaded avatar image",
+            "example": "https://cdn.example.com/avatars/a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e.png"
+          }
+        }
+      },
+      "AvatarUploadResponse": {
+        "type": "object",
+        "description": "Response for avatar upload",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Response code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AvatarUploadData",
+            "description": "Avatar upload data"
+          }
+        }
+      },
+      "CompleteUploadData": {
+        "type": "object",
+        "description": "Upload completion data",
+        "properties": {
+          "fileUrl": {
+            "type": "string",
+            "description": "URL of the uploaded file",
+            "example": "https://cdn.example.com/files/abc123.png"
+          }
+        }
+      },
+      "SingleAttachmentUploadResponse": {
+        "type": "object",
+        "description": "Response for single attachment upload",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Response code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CompleteUploadData",
+            "description": "Upload completion data"
+          }
+        }
+      },
+      "UploadChunkResponse": {
+        "type": "object",
+        "description": "Response for chunk upload",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Response code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "success"
+          }
+        }
+      },
+      "InitiateAttachmentUploadResponse": {
+        "type": "object",
+        "description": "Response for initiating attachment upload",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Response code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/InitiateUploadData",
+            "description": "Upload initiation data"
+          }
+        }
+      },
+      "InitiateUploadData": {
+        "type": "object",
+        "description": "Upload initiation data",
+        "properties": {
+          "uploadMode": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Upload mode: 0=Already exists, 1=Single upload, 2=Chunk upload",
+            "example": 2
+          },
+          "chunkSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Size of each chunk in bytes (for chunk mode)",
+            "example": 5242880
+          },
+          "totalChunks": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total number of chunks (for chunk mode)",
+            "example": 10
+          },
+          "startChunkNumber": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Starting chunk number (for chunk mode)",
+            "example": 1
+          },
+          "objectName": {
+            "type": "string",
+            "description": "Object name in storage (for chunk mode)",
+            "example": "uploads/2025/01/abc123.png"
+          },
+          "fileUrl": {
+            "type": "string",
+            "description": "File URL (if file already exists)",
+            "example": "https://cdn.example.com/files/abc123.png"
+          }
+        }
+      },
+      "InitiateUploadRequest": {
+        "type": "object",
+        "description": "Request to initiate file upload",
+        "properties": {
+          "fileSize": {
+            "type": "integer",
+            "format": "int32",
+            "description": "File size in bytes",
+            "example": 10485760
+          },
+          "fileSha256": {
+            "type": "string",
+            "description": "SHA256 hash of the file",
+            "example": "a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e",
+            "minLength": 1
+          },
+          "originalFilename": {
+            "type": "string",
+            "description": "Original filename with extension (used to determine file extension)",
+            "example": "document.pdf",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "fileSha256",
+          "fileSize",
+          "originalFilename"
+        ]
+      },
+      "CompleteAttachmentUploadResponse": {
+        "type": "object",
+        "description": "Response for completing attachment upload",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Response code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CompleteUploadData",
+            "description": "Upload completion data"
+          }
+        }
+      },
+      "CompleteUploadRequest": {
+        "type": "object",
+        "description": "Request to complete multipart upload",
+        "properties": {
+          "objectName": {
+            "type": "string",
+            "description": "Object name in storage",
+            "example": "uploads/2025/01/abc123.png",
+            "minLength": 1
+          },
+          "totalChunks": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total number of chunks uploaded",
+            "example": 10
+          }
+        },
+        "required": [
+          "objectName",
+          "totalChunks"
+        ]
+      },
+      "AbortAttachmentUploadResponse": {
+        "type": "object",
+        "description": "Response for aborting attachment upload",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Response code",
+            "example": 200
+          },
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "Upload aborted successfully"
+          }
+        }
+      },
+      "AbortUploadRequest": {
+        "type": "object",
+        "description": "Request to abort multipart upload",
+        "properties": {
+          "objectName": {
+            "type": "string",
+            "description": "Object name in storage to abort",
+            "example": "uploads/2025/01/abc123.png",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "objectName"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "description": "JWT Bearer Token Authentication",
+        "name": "bearerAuth",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}
