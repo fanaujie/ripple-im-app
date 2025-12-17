@@ -165,7 +165,9 @@
           <div class="flex items-end gap-3">
             <textarea
               v-model="messageInput"
-              @keydown.enter.exact.prevent="handleSend"
+              @keydown.enter.exact="handleKeydownEnter"
+              @compositionstart="isComposing = true"
+              @compositionend="onCompositionEnd"
               placeholder="Type a message..."
               rows="1"
               class="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -290,6 +292,8 @@ const {
 const selectedConversation = ref<ConversationDisplay | null>(null);
 const searchQuery = ref('');
 const messageInput = ref('');
+const isComposing = ref(false);
+const justFinishedComposing = ref(false);
 const messagesContainer = ref<HTMLElement | null>(null);
 
 // Stranger banner state
@@ -479,6 +483,24 @@ async function selectConversation(conversation: ConversationDisplay) {
   } catch (error) {
     console.error('Failed to select conversation:', error);
   }
+}
+
+// Handle IME composition end
+function onCompositionEnd() {
+  isComposing.value = false;
+  justFinishedComposing.value = true;
+}
+
+// Handle Enter key - ignore during IME composition
+function handleKeydownEnter(event: KeyboardEvent) {
+  // Ignore Enter that confirms IME selection
+  if (justFinishedComposing.value) {
+    justFinishedComposing.value = false;
+    return;
+  }
+  if (isComposing.value || event.isComposing) return;
+  event.preventDefault();
+  handleSend();
 }
 
 // Send message

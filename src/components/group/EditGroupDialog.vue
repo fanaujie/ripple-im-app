@@ -110,7 +110,9 @@
               :disabled="isUpdatingName"
               placeholder="Enter group name"
               class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-              @keyup.enter="handleSaveName"
+              @keydown.enter="(e: KeyboardEvent) => { if (justFinishedComposing) { justFinishedComposing = false; return; } if (!isComposing && !e.isComposing) handleSaveName() }"
+              @compositionstart="isComposing = true"
+              @compositionend="onCompositionEnd"
             />
             <!-- Checkmark button - only show when name changed and valid -->
             <button
@@ -201,6 +203,12 @@ const avatarPicker = useAvatarPicker();
 // State
 const localGroupName = ref('');
 const savedGroupName = ref(''); // Track the last saved name
+const isComposing = ref(false);
+const justFinishedComposing = ref(false);
+const onCompositionEnd = () => {
+  isComposing.value = false;
+  justFinishedComposing.value = true;
+};
 const isUploadingAvatar = ref(false);
 const isDeletingAvatar = ref(false);
 const isUpdatingName = ref(false);

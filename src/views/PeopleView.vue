@@ -168,8 +168,10 @@
               <input
                 ref="editNameInput"
                 v-model="newFriendName"
-                @keydown.enter="saveNewName(friend)"
+                @keydown.enter="(e: KeyboardEvent) => { if (justFinishedComposing) { justFinishedComposing = false; return; } if (!isComposing && !e.isComposing) saveNewName(friend) }"
                 @keydown.esc="cancelEditing"
+                @compositionstart="isComposing = true"
+                @compositionend="onCompositionEnd"
                 type="text"
                 placeholder="Enter remark name"
                 class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
@@ -398,7 +400,9 @@
           <div class="flex gap-3 mb-6">
             <input
               v-model="addFriendId"
-              @keydown.enter="searchUser"
+              @keydown.enter="(e: KeyboardEvent) => { if (justFinishedComposing) { justFinishedComposing = false; return; } if (!isComposing && !e.isComposing) searchUser() }"
+              @compositionstart="isComposing = true"
+              @compositionend="onCompositionEnd"
               type="text"
               placeholder="Enter user ID..."
               class="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -572,6 +576,12 @@ const showMenu = ref<string | null>(null);
 const editingFriend = ref<string | null>(null);
 const newFriendName = ref('');
 const editNameInput = ref<HTMLInputElement | null>(null);
+const isComposing = ref(false);
+const justFinishedComposing = ref(false);
+const onCompositionEnd = () => {
+  isComposing.value = false;
+  justFinishedComposing.value = true;
+};
 
 // Confirmation modal state
 const showConfirmModal = ref(false);

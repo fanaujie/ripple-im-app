@@ -85,8 +85,10 @@
                        class="flex-1 px-4 py-2.5 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                        placeholder="Enter your nickname"
                        :disabled="isUpdating"
-                       @keydown.enter="saveNickname"
-                       @keydown.escape="cancelEditingNickname">
+                       @keydown.enter="(e: KeyboardEvent) => { if (justFinishedComposing) { justFinishedComposing = false; return; } if (!isComposing && !e.isComposing) saveNickname() }"
+                       @keydown.escape="cancelEditingNickname"
+                       @compositionstart="isComposing = true"
+                       @compositionend="onCompositionEnd">
                 <button @click="saveNickname"
                         :disabled="isUpdating || !nicknameInput.trim()"
                         class="p-1.5 text-green-600 hover:text-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
@@ -173,6 +175,12 @@ const avatarPicker = useAvatarPicker();
 
 // Local UI state
 const nicknameInput = ref<string>('');
+const isComposing = ref(false);
+const justFinishedComposing = ref(false);
+const onCompositionEnd = () => {
+  isComposing.value = false;
+  justFinishedComposing.value = true;
+};
 const isUpdating = ref<boolean>(false);
 const isEditingNickname = ref<boolean>(false);
 const showErrorDialog = ref<boolean>(false);
