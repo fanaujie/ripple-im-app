@@ -158,14 +158,12 @@
       </div>
     </div>
 
-    <!-- Avatar Preview Dialog -->
-    <AvatarPreviewDialog
+    <!-- Avatar Cropper Dialog -->
+    <AvatarCropper
       :is-open="avatarPicker.showPreviewDialog.value"
-      :preview-url="avatarPicker.avatarPreview.value"
-      :is-uploading="isUploadingAvatar"
-      title="Preview Group Avatar"
+      :image-src="avatarPicker.avatarPreview.value"
       @close="avatarPicker.closePreview()"
-      @confirm="confirmAndUploadAvatar"
+      @save="confirmAndUploadAvatar"
     />
   </div>
 </template>
@@ -174,7 +172,7 @@
 import { ref, computed, watch } from 'vue';
 import { useGroupActions } from '../../composables/chat/useGroupActions';
 import { useAvatarPicker } from '../../composables/useAvatarPicker';
-import AvatarPreviewDialog from '../common/AvatarPreviewDialog.vue';
+import AvatarCropper from '../common/AvatarCropper.vue';
 
 defineOptions({
   name: 'EditGroupDialog',
@@ -197,7 +195,7 @@ interface Emits {
 
 const emit = defineEmits<Emits>();
 
-const { updateGroupName, updateGroupAvatar } = useGroupActions();
+const { updateGroupName } = useGroupActions();
 const avatarPicker = useAvatarPicker();
 
 // State
@@ -279,21 +277,23 @@ async function handleDeleteAvatar() {
   avatarErrorMessage.value = 'Delete group avatar is not supported yet';
 }
 
-async function confirmAndUploadAvatar(cropRatio: number) {
-  if (!avatarPicker.selectedFile.value || isUploadingAvatar.value) return;
+async function confirmAndUploadAvatar(blob: Blob) {
+  if (isUploadingAvatar.value) return;
 
   isUploadingAvatar.value = true;
   clearAvatarMessages();
 
   // Store preview before closing dialog
   const previewUrl = avatarPicker.avatarPreview.value;
-  const filePath = avatarPicker.selectedFile.value;
 
   // Close preview dialog immediately
   avatarPicker.closePreview();
 
   try {
-    await updateGroupAvatar(props.groupId, filePath, cropRatio);
+    const success = await avatarPicker.uploadGroupAvatarBlob(props.groupId, blob);
+    if (!success) {
+      throw new Error(avatarPicker.error.value || 'Failed to upload avatar');
+    }
     uploadedAvatarPreview.value = previewUrl;
     avatarSuccessMessage.value = 'Avatar updated';
     emit('success');

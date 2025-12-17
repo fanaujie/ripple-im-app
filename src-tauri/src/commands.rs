@@ -1,6 +1,5 @@
 use crate::app_config::AppConfig;
 use crate::file_utils::FileUtils;
-use crate::image_processor::ImageProcessor;
 use crate::ripple_api::api_response::{
     GroupMemberData, ReadMessagesData, RelationUsers, SendMessageRequest, UserProfileData,
 };
@@ -71,25 +70,28 @@ pub async fn get_user_profile(
     }
 }
 
-/// Upload user avatar with crop position
-/// crop_ratio: 0.0 = crop from top, 1.0 = crop from bottom
 #[tauri::command]
-pub async fn update_user_avatar(
+pub async fn upload_user_avatar_blob(
     app: AppHandle,
-    upload_filepath: String,
-    crop_ratio: f64,
+    image_data: String, // base64 encoded PNG
 ) -> Result<(), errors::CommandError> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use mime::IMAGE_PNG;
+
     let ripple = app.state::<RippleApi<DefaultStoreEngine>>();
-    let filepath = Path::new(&upload_filepath);
-    let filename =
-        FileUtils::get_file_name(filepath).ok_or(anyhow::anyhow!("Invalid file path"))?;
-    let resized_img = ImageProcessor::new().resize_to_square(filepath, 460, crop_ratio)?;
+
+    // Decode base64 to bytes
+    let image_bytes = STANDARD
+        .decode(&image_data)
+        .map_err(|e| anyhow::anyhow!("Failed to decode base64: {}", e))?;
+
     let res = ripple
-        .upload_avatar(filename.to_string(), resized_img.0, resized_img.1)
+        .upload_avatar("avatar.png".to_string(), IMAGE_PNG, image_bytes)
         .await?;
+
     if res.code != 200 {
         return Err(errors::CommandError::RippleAPIError(
-            "upload_avatar".to_string(),
+            "upload_user_avatar_blob".to_string(),
             res.code,
             res.message,
         ));
@@ -97,36 +99,70 @@ pub async fn update_user_avatar(
     Ok(())
 }
 
-/// Upload an image file, resize it with crop position, and return the URL
-/// crop_ratio: 0.0 = crop from top, 1.0 = crop from bottom
 #[tauri::command]
-pub async fn upload_image(
+pub async fn upload_image_blob(
     app: AppHandle,
-    upload_filepath: String,
-    crop_ratio: f64,
+    image_data: String, // base64 encoded PNG
 ) -> Result<String, errors::CommandError> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use mime::IMAGE_PNG;
+
     let ripple = app.state::<RippleApi<DefaultStoreEngine>>();
-    let filepath = Path::new(&upload_filepath);
-    let filename =
-        FileUtils::get_file_name(filepath).ok_or(anyhow::anyhow!("Invalid file path"))?;
-    let resized_img = ImageProcessor::new().resize_to_square(filepath, 460, crop_ratio)?;
+
+    // Decode base64 to bytes
+    let image_bytes = STANDARD
+        .decode(&image_data)
+        .map_err(|e| anyhow::anyhow!("Failed to decode base64: {}", e))?;
+
     let res = ripple
-        .upload_avatar(filename.to_string(), resized_img.0, resized_img.1)
+        .upload_avatar("avatar.png".to_string(), IMAGE_PNG, image_bytes)
         .await?;
+
     if res.code != 200 {
         return Err(errors::CommandError::RippleAPIError(
-            "upload_image".to_string(),
+            "upload_image_blob".to_string(),
             res.code,
             res.message,
         ));
     }
+
     res.data.map(|d| d.url).ok_or_else(|| {
         errors::CommandError::RippleAPIError(
-            "upload_image".to_string(),
+            "upload_image_blob".to_string(),
             500,
             "No URL returned".to_string(),
         )
     })
+}
+
+#[tauri::command]
+pub async fn upload_group_avatar_blob(
+    app: AppHandle,
+    group_id: String,
+    image_data: String, // base64 encoded PNG
+) -> Result<(), errors::CommandError> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use mime::IMAGE_PNG;
+
+    let ripple = app.state::<RippleApi<DefaultStoreEngine>>();
+
+    // Decode base64 to bytes
+    let image_bytes = STANDARD
+        .decode(&image_data)
+        .map_err(|e| anyhow::anyhow!("Failed to decode base64: {}", e))?;
+
+    let res = ripple
+        .upload_group_avatar(group_id, "avatar.png".to_string(), IMAGE_PNG, image_bytes)
+        .await?;
+
+    if res.code != 200 {
+        return Err(errors::CommandError::RippleAPIError(
+            "upload_group_avatar_blob".to_string(),
+            res.code,
+            res.message,
+        ));
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -536,33 +572,6 @@ pub async fn update_group_name(
             response.message,
         ))
     }
-}
-
-/// Upload group avatar with crop position
-/// crop_ratio: 0.0 = crop from top, 1.0 = crop from bottom
-#[tauri::command]
-pub async fn update_group_avatar(
-    app: AppHandle,
-    group_id: String,
-    upload_filepath: String,
-    crop_ratio: f64,
-) -> Result<(), errors::CommandError> {
-    let ripple = app.state::<RippleApi<DefaultStoreEngine>>();
-    let filepath = Path::new(&upload_filepath);
-    let filename =
-        FileUtils::get_file_name(filepath).ok_or(anyhow::anyhow!("Invalid file path"))?;
-    let resized_img = ImageProcessor::new().resize_to_square(filepath, 460, crop_ratio)?;
-    let res = ripple
-        .upload_group_avatar(group_id, filename.to_string(), resized_img.0, resized_img.1)
-        .await?;
-    if res.code != 200 {
-        return Err(errors::CommandError::RippleAPIError(
-            "update_group_avatar".to_string(),
-            res.code,
-            res.message,
-        ));
-    }
-    Ok(())
 }
 
 #[tauri::command]

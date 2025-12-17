@@ -3,6 +3,23 @@ import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 
 /**
+ * Helper to convert Blob to base64 string
+ */
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      // Remove data URL prefix (e.g., "data:image/png;base64,")
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
  * Composable for avatar picking with preview
  */
 export function useAvatarPicker() {
@@ -40,20 +57,17 @@ export function useAvatarPicker() {
   }
 
   /**
-   * Upload image with crop ratio and return URL
-   * For user avatar (no URL returned, just upload)
+   * Upload user avatar from pre-cropped blob
    */
-  async function uploadUserAvatar(cropRatio: number): Promise<boolean> {
-    if (!selectedFile.value || isUploading.value) return false;
+  async function uploadUserAvatarBlob(blob: Blob): Promise<boolean> {
+    if (isUploading.value) return false;
 
     isUploading.value = true;
     error.value = '';
 
     try {
-      await invoke('update_user_avatar', {
-        uploadFilepath: selectedFile.value,
-        cropRatio,
-      });
+      const imageData = await blobToBase64(blob);
+      await invoke('upload_user_avatar_blob', { imageData });
       return true;
     } catch (err) {
       console.error('Error uploading avatar:', err);
@@ -65,25 +79,44 @@ export function useAvatarPicker() {
   }
 
   /**
-   * Upload image with crop ratio and return URL
-   * For group avatar or other uses
+   * Upload image from pre-cropped blob and return URL
    */
-  async function uploadImage(cropRatio: number): Promise<string | null> {
-    if (!selectedFile.value || isUploading.value) return null;
+  async function uploadImageBlob(blob: Blob): Promise<string | null> {
+    if (isUploading.value) return null;
 
     isUploading.value = true;
     error.value = '';
 
     try {
-      const url = await invoke<string>('upload_image', {
-        uploadFilepath: selectedFile.value,
-        cropRatio,
-      });
+      const imageData = await blobToBase64(blob);
+      const url = await invoke<string>('upload_image_blob', { imageData });
       return url;
     } catch (err) {
       console.error('Error uploading image:', err);
       error.value = err instanceof Error ? err.message : 'Failed to upload image';
       return null;
+    } finally {
+      isUploading.value = false;
+    }
+  }
+
+  /**
+   * Upload group avatar from pre-cropped blob
+   */
+  async function uploadGroupAvatarBlob(groupId: string, blob: Blob): Promise<boolean> {
+    if (isUploading.value) return false;
+
+    isUploading.value = true;
+    error.value = '';
+
+    try {
+      const imageData = await blobToBase64(blob);
+      await invoke('upload_group_avatar_blob', { groupId, imageData });
+      return true;
+    } catch (err) {
+      console.error('Error uploading group avatar:', err);
+      error.value = err instanceof Error ? err.message : 'Failed to upload group avatar';
+      return false;
     } finally {
       isUploading.value = false;
     }
@@ -116,8 +149,9 @@ export function useAvatarPicker() {
     error,
     // Methods
     selectFile,
-    uploadUserAvatar,
-    uploadImage,
+    uploadUserAvatarBlob,
+    uploadImageBlob,
+    uploadGroupAvatarBlob,
     closePreview,
     reset,
   };

@@ -141,14 +141,12 @@
       </div>
     </div>
 
-    <!-- Avatar Preview Dialog -->
-    <AvatarPreviewDialog
+    <!-- Avatar Cropper Dialog -->
+    <AvatarCropper
       :is-open="avatarPicker.showPreviewDialog.value"
-      :preview-url="avatarPicker.avatarPreview.value"
-      :is-uploading="avatarPicker.isUploading.value"
-      title="Preview Group Avatar"
+      :image-src="avatarPicker.avatarPreview.value"
       @close="avatarPicker.closePreview()"
-      @confirm="confirmAvatar"
+      @save="confirmAvatar"
     />
   </div>
 </template>
@@ -158,7 +156,7 @@ import { ref, computed, watch } from 'vue';
 import type { RelationUser } from '../../types/relations';
 import { useGroupActions } from '../../composables/chat/useGroupActions';
 import { useAvatarPicker } from '../../composables/useAvatarPicker';
-import AvatarPreviewDialog from '../common/AvatarPreviewDialog.vue';
+import AvatarCropper from '../common/AvatarCropper.vue';
 import defaultAvatarUrl from '../../assets/default-avatar.svg';
 
 defineOptions({
@@ -180,7 +178,7 @@ interface Emits {
 
 const emit = defineEmits<Emits>();
 
-const { createGroup, updateGroupAvatar } = useGroupActions();
+const { createGroup } = useGroupActions();
 const avatarPicker = useAvatarPicker();
 
 // Form state
@@ -189,8 +187,7 @@ const selectedMemberIds = ref(new Set<string>());
 const isCreating = ref(false);
 const errorMessage = ref('');
 const groupAvatarPreview = ref<string>('');
-const pendingAvatarFile = ref<string | null>(null);
-const pendingAvatarCropRatio = ref<number>(0.5);
+const pendingAvatarBlob = ref<Blob | null>(null);
 
 // Computed
 const isFormValid = computed(() => {
@@ -234,25 +231,23 @@ function resetForm() {
   errorMessage.value = '';
   isCreating.value = false;
   groupAvatarPreview.value = '';
-  pendingAvatarFile.value = null;
-  pendingAvatarCropRatio.value = 0.5;
+  pendingAvatarBlob.value = null;
   avatarPicker.reset();
 }
 
-function confirmAvatar(cropRatio: number) {
-  // Store file path and crop ratio for later upload after group creation
-  if (avatarPicker.selectedFile.value) {
-    pendingAvatarFile.value = avatarPicker.selectedFile.value;
-    pendingAvatarCropRatio.value = cropRatio;
-    groupAvatarPreview.value = avatarPicker.avatarPreview.value;
-    avatarPicker.closePreview();
-  }
+function confirmAvatar(blob: Blob) {
+  // Store blob for later upload after group creation
+  pendingAvatarBlob.value = blob;
+  groupAvatarPreview.value = URL.createObjectURL(blob);
+  avatarPicker.closePreview();
 }
 
 function removeAvatar() {
+  if (groupAvatarPreview.value.startsWith('blob:')) {
+    URL.revokeObjectURL(groupAvatarPreview.value);
+  }
   groupAvatarPreview.value = '';
-  pendingAvatarFile.value = null;
-  pendingAvatarCropRatio.value = 0.5;
+  pendingAvatarBlob.value = null;
 }
 
 function handleClose() {
@@ -283,9 +278,9 @@ async function handleCreate() {
     console.log('[CreateGroupDialog] Group created:', groupId);
 
     // If avatar was selected, upload and update the group avatar
-    if (pendingAvatarFile.value) {
+    if (pendingAvatarBlob.value) {
       try {
-        await updateGroupAvatar(groupId, pendingAvatarFile.value, pendingAvatarCropRatio.value);
+        await avatarPicker.uploadGroupAvatarBlob(groupId, pendingAvatarBlob.value);
         console.log('[CreateGroupDialog] Group avatar updated');
       } catch (avatarError) {
         console.error('[CreateGroupDialog] Failed to set group avatar:', avatarError);

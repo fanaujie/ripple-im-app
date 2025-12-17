@@ -120,14 +120,12 @@
       </div>
     </div>
 
-    <!-- Avatar Preview Dialog -->
-    <AvatarPreviewDialog
+    <!-- Avatar Cropper Dialog -->
+    <AvatarCropper
       :is-open="avatarPicker.showPreviewDialog.value"
-      :preview-url="avatarPicker.avatarPreview.value"
-      :is-uploading="avatarPicker.isUploading.value"
-      title="Preview Profile Image"
+      :image-src="avatarPicker.avatarPreview.value"
       @close="avatarPicker.closePreview()"
-      @confirm="handleAvatarConfirm"
+      @save="handleAvatarSave"
     />
 
     <!-- Error Dialog -->
@@ -161,7 +159,7 @@ import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { useUserProfileDisplay } from '../composables/useUserProfileDisplay';
 import { useAvatarPicker } from '../composables/useAvatarPicker';
-import AvatarPreviewDialog from '../components/common/AvatarPreviewDialog.vue';
+import AvatarCropper from '../components/common/AvatarCropper.vue';
 import defaultAvatarUrl from '../assets/default-avatar.svg';
 
 // Define component name for KeepAlive
@@ -220,8 +218,8 @@ const saveNickname = async () => {
 };
 
 // Avatar methods
-async function handleAvatarConfirm(cropRatio: number) {
-  const success = await avatarPicker.uploadUserAvatar(cropRatio);
+async function handleAvatarSave(blob: Blob) {
+  const success = await avatarPicker.uploadUserAvatarBlob(blob);
   if (success) {
     avatarPicker.closePreview();
   } else {
