@@ -80,6 +80,7 @@ pub fn run() {
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             commands::exists_token,
             commands::start_server,
@@ -110,6 +111,7 @@ pub fn run() {
             commands::update_group_name,
             commands::update_group_avatar,
             commands::leave_group,
+            commands::upload_attachment,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

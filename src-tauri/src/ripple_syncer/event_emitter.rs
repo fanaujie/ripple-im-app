@@ -89,6 +89,10 @@ pub struct UIMessageItem {
     pub command_type: Option<i32>,
     #[serde(rename = "commandData", skip_serializing_if = "Option::is_none")]
     pub command_data: Option<String>,
+    #[serde(rename = "fileUrl", skip_serializing_if = "Option::is_none")]
+    pub file_url: Option<String>,
+    #[serde(rename = "fileName", skip_serializing_if = "Option::is_none")]
+    pub file_name: Option<String>,
 }
 
 impl From<PushMessageRequest> for UIMessageItem {
@@ -100,6 +104,17 @@ impl From<PushMessageRequest> for UIMessageItem {
                     .expect("MessagePayload must have message_data");
                 match &message_data.message {
                     Some(send_message_req::Message::SingleMessageContent(msg_context)) => {
+                        // Map file_url and file_name, treating empty strings as None
+                        let file_url = if msg_context.file_url.is_empty() {
+                            None
+                        } else {
+                            Some(msg_context.file_url.clone())
+                        };
+                        let file_name = if msg_context.file_name.is_empty() {
+                            None
+                        } else {
+                            Some(msg_context.file_name.clone())
+                        };
                         UIMessageItem {
                             message_id: message_data.message_id.to_string(),
                             conversation_id: message_data.conversation_id,
@@ -109,6 +124,8 @@ impl From<PushMessageRequest> for UIMessageItem {
                             message_type: 1, // Text
                             command_type: None,
                             command_data: None,
+                            file_url,
+                            file_name,
                         }
                     }
                     Some(send_message_req::Message::GroupCommandMessageContent(cmd_content)) => {
@@ -121,6 +138,8 @@ impl From<PushMessageRequest> for UIMessageItem {
                             message_type: 2, // Command
                             command_type: Some(cmd_content.command_type),
                             command_data: Some(cmd_content.text.clone()),
+                            file_url: None,
+                            file_name: None,
                         }
                     }
                     _ => panic!("Unsupported message type in PushMessageRequest"),

@@ -182,6 +182,10 @@ export interface UIMessageItem {
   commandType?: number;
   /** Command data payload */
   commandData?: string;
+  /** File URL if message contains file */
+  fileUrl?: string;
+  /** File name if message contains file */
+  fileName?: string;
 }
 
 /**

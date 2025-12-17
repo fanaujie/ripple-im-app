@@ -10,6 +10,8 @@ use crate::ripple_syncer::DataSyncManager;
 use crate::server::Server;
 use crate::{errors, DefaultStoreEngine};
 use anyhow::anyhow;
+use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::path::Path;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
@@ -118,13 +120,13 @@ pub async fn upload_image(
             res.message,
         ));
     }
-    res.data
-        .map(|d| d.url)
-        .ok_or_else(|| errors::CommandError::RippleAPIError(
+    res.data.map(|d| d.url).ok_or_else(|| {
+        errors::CommandError::RippleAPIError(
             "upload_image".to_string(),
             500,
             "No URL returned".to_string(),
-        ))
+        )
+    })
 }
 
 #[tauri::command]
@@ -591,5 +593,161 @@ pub async fn leave_group(
             response.code,
             response.message,
         ))
+    }
+}
+
+#[derive(Clone, Serialize)]
+pub struct UploadAttachmentResponse {
+    pub file_url: String,
+}
+
+#[tauri::command]
+pub async fn upload_attachment(
+    app: AppHandle,
+    file_path: String,
+) -> Result<UploadAttachmentResponse, errors::CommandError> {
+    let ripple = app.state::<RippleApi<DefaultStoreEngine>>();
+    let filepath = Path::new(&file_path);
+
+    let file_data = std::fs::read(filepath).map_err(|e| anyhow!("Failed to read file: {}", e))?;
+    let file_size = file_data.len() as i64;
+
+    let mut hasher = Sha256::new();
+    hasher.update(&file_data);
+    let file_sha256 = format!("{:x}", hasher.finalize());
+
+    let original_filename =
+        FileUtils::get_file_name(filepath).ok_or(anyhow!("Invalid file path"))?;
+
+    let init_response = ripple
+        .initiate_attachment_upload(
+            file_size,
+            file_sha256.clone(),
+            original_filename.to_string(),
+        )
+        .await?;
+
+    if init_response.code != 200 {
+        return Err(errors::CommandError::RippleAPIError(
+            "initiate_attachment_upload".to_string(),
+            init_response.code,
+            init_response.message,
+        ));
+    }
+
+    let init_data = init_response
+        .data
+        .ok_or(anyhow!("No data in initiate response"))?;
+
+    match init_data.upload_mode {
+        // Mode 0: File already exists
+        0 => {
+            let file_url = init_data
+                .file_url
+                .ok_or(anyhow!("No file_url in mode 0 response"))?;
+            Ok(UploadAttachmentResponse { file_url })
+        }
+
+        // Mode 1: Single upload (<5MB)
+        1 => {
+            let object_name = init_data
+                .object_name
+                .ok_or(anyhow!("No object_name in mode 1 response"))?;
+
+            let upload_response = ripple
+                .upload_attachment_single(
+                    object_name,
+                    file_sha256,
+                    file_data,
+                    original_filename.to_string(),
+                )
+                .await?;
+
+            if upload_response.code != 200 {
+                return Err(errors::CommandError::RippleAPIError(
+                    "upload_attachment_single".to_string(),
+                    upload_response.code,
+                    upload_response.message,
+                ));
+            }
+
+            let file_url = upload_response
+                .data
+                .ok_or(anyhow!("No data in single upload response"))?
+                .file_url;
+            Ok(UploadAttachmentResponse { file_url })
+        }
+
+        2 => {
+            let object_name = init_data
+                .object_name
+                .ok_or(anyhow!("No object_name in mode 2 response"))?;
+            let chunk_size = init_data
+                .chunk_size
+                .ok_or(anyhow!("No chunk_size in mode 2 response"))?
+                as usize;
+            let total_chunks = init_data
+                .total_chunks
+                .ok_or(anyhow!("No total_chunks in mode 2 response"))?;
+            // API uses 1-based chunk numbering
+            let start_chunk = match init_data.start_chunk_number {
+                Some(n) => n,
+                None => panic!("No start_chunk_number in mode 2 response"),
+            };
+            // Upload each chunk (1-based indexing: 1..=total_chunks)
+            for chunk_number in start_chunk..=total_chunks {
+                let chunk_start = ((chunk_number - 1) as usize) * chunk_size;
+                let chunk_end = std::cmp::min(chunk_start + chunk_size, file_data.len());
+                let chunk_data = file_data[chunk_start..chunk_end].to_vec();
+
+                // Compute chunk SHA256
+                let mut chunk_hasher = Sha256::new();
+                chunk_hasher.update(&chunk_data);
+                let chunk_sha256 = format!("{:x}", chunk_hasher.finalize());
+
+                let chunk_response = ripple
+                    .upload_attachment_chunk(
+                        object_name.clone(),
+                        chunk_number,
+                        chunk_sha256,
+                        chunk_data,
+                    )
+                    .await?;
+
+                if chunk_response.code != 200 {
+                    // Abort upload on failure
+                    let _ = ripple.abort_attachment_upload(object_name.clone()).await;
+                    return Err(errors::CommandError::RippleAPIError(
+                        "upload_attachment_chunk".to_string(),
+                        chunk_response.code,
+                        chunk_response.message,
+                    ));
+                }
+            }
+
+            let complete_response = ripple
+                .complete_attachment_upload(object_name, total_chunks)
+                .await?;
+
+            if complete_response.code != 200 {
+                return Err(errors::CommandError::RippleAPIError(
+                    "complete_attachment_upload".to_string(),
+                    complete_response.code,
+                    complete_response.message,
+                ));
+            }
+
+            let file_url = complete_response
+                .data
+                .ok_or(anyhow!("No data in complete upload response"))?
+                .file_url;
+            Ok(UploadAttachmentResponse { file_url })
+        }
+
+        _ => Err(errors::CommandError::RippleAPIError(
+            "upload_attachment".to_string(),
+            400,
+            format!("Unknown upload mode: {}", init_data.upload_mode),
+        )),
     }
 }

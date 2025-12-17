@@ -3,6 +3,12 @@ pub struct ApiPaths {
     // Pre-built full URLs for upload gateway
     pub upload_avatar: String,
     pub upload_group_avatar_base: String,
+    // Attachment upload paths
+    pub attachment_initiate: String,
+    pub attachment_single: String,
+    pub attachment_chunk: String,
+    pub attachment_complete: String,
+    pub attachment_abort: String,
     // User profile paths
     pub my_profile: String,
     pub user_profile: String,
@@ -28,6 +34,15 @@ impl ApiPaths {
         Self {
             upload_avatar: format!("{}/api/upload/avatar", upload_gateway_url),
             upload_group_avatar_base: format!("{}/api/upload/groups", upload_gateway_url),
+            // Attachment upload paths
+            attachment_initiate: format!("{}/api/upload/attachment/initiate", upload_gateway_url),
+            attachment_single: format!("{}/api/upload/attachment/single", upload_gateway_url),
+            attachment_chunk: format!("{}/api/upload/attachment/chunk", upload_gateway_url),
+            attachment_complete: format!(
+                "{}/api/upload/attachment/chunk/complete",
+                upload_gateway_url
+            ),
+            attachment_abort: format!("{}/api/upload/attachment/abort", upload_gateway_url),
             // User profile paths
             my_profile: format!("{}/api/users/me/profile", api_gateway_url),
             user_profile: format!("{}/api/users", api_gateway_url),

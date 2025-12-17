@@ -27,6 +27,8 @@ export function useMessagesState() {
       text: uiMessage.content,
       commandType: uiMessage.commandType,
       commandData: uiMessage.commandData,
+      fileUrl: uiMessage.fileUrl,
+      fileName: uiMessage.fileName,
     };
   }
 

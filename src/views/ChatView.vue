@@ -127,19 +127,53 @@
                 message.senderId === currentUserId ? 'justify-end' : 'justify-start',
               ]"
             >
-              <!-- Sent messages: timestamp on left, bubble on right -->
+              <!-- Sent messages: timestamp on left, content on right -->
               <template v-if="message.senderId === currentUserId">
                 <div class="text-xs text-gray-400 pb-1 whitespace-nowrap">
                   {{ formatMessageTime(message.sendTimestamp) }}
                 </div>
-                <div class="max-w-md px-4 py-2 rounded-2xl bg-blue-500 text-white">
+                <!-- Image message -->
+                <ImageMessageBubble
+                  v-if="message.fileUrl && isImageFile(message.fileName)"
+                  :file-url="message.fileUrl"
+                  :file-name="message.fileName || ''"
+                  :is-self="true"
+                  @preview="openImagePreview"
+                />
+                <!-- File message -->
+                <FileMessageBubble
+                  v-else-if="message.fileUrl"
+                  :file-url="message.fileUrl"
+                  :file-name="message.fileName || ''"
+                  :is-self="true"
+                  @preview="openFileInfo"
+                />
+                <!-- Text message -->
+                <div v-else class="max-w-md px-4 py-2 rounded-2xl bg-blue-500 text-white">
                   <div>{{ message.text }}</div>
                 </div>
               </template>
 
-              <!-- Received messages: bubble on left, timestamp on right -->
+              <!-- Received messages: content on left, timestamp on right -->
               <template v-else>
-                <div class="max-w-md px-4 py-2 rounded-2xl bg-white text-gray-900">
+                <!-- Image message -->
+                <ImageMessageBubble
+                  v-if="message.fileUrl && isImageFile(message.fileName)"
+                  :file-url="message.fileUrl"
+                  :file-name="message.fileName || ''"
+                  :is-self="false"
+                  @preview="openImagePreview"
+                />
+                <!-- File message -->
+                <FileMessageBubble
+                  v-else-if="message.fileUrl"
+                  :file-url="message.fileUrl"
+                  :file-name="message.fileName || ''"
+                  :is-self="false"
+                  @preview="openFileInfo"
+                />
+                <!-- Text message -->
+                <div v-else class="max-w-md px-4 py-2 rounded-2xl bg-white text-gray-900">
                   <div>{{ message.text }}</div>
                 </div>
                 <div class="text-xs text-gray-400 pb-1 whitespace-nowrap">
@@ -148,6 +182,33 @@
               </template>
             </div>
           </template>
+
+          <!-- Upload Progress Placeholder -->
+          <div v-if="uploading" class="flex justify-end px-4 py-2">
+            <div class="max-w-xs bg-blue-100 border border-blue-200 rounded-2xl rounded-br-sm px-4 py-3">
+              <div class="flex items-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-blue-500 flex-shrink-0">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                </svg>
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm text-blue-800 truncate mb-1">{{ uploadProgress?.fileName || 'Uploading...' }}</div>
+                  <div v-if="progressPercent >= 0" class="flex items-center gap-2">
+                    <div class="flex-1 bg-blue-200 rounded-full h-1.5">
+                      <div class="bg-blue-500 h-1.5 rounded-full transition-all duration-300" :style="{ width: `${progressPercent}%` }"></div>
+                    </div>
+                    <span class="text-xs text-blue-600 w-8 text-right">{{ progressPercent }}%</span>
+                  </div>
+                  <div v-else class="flex items-center gap-2">
+                    <svg class="animate-spin h-3 w-3 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span class="text-xs text-blue-600">Uploading...</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Blocked User Notification (replaces input area) -->
@@ -163,6 +224,18 @@
         <!-- Input Area (only shown when user is not blocked) -->
         <div v-else class="bg-white border-t border-gray-200 px-6 py-4">
           <div class="flex items-end gap-3">
+            <!-- File Attachment Button -->
+            <button
+              @click="handleAttachFile"
+              :disabled="uploading"
+              class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Attach file"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
+              </svg>
+            </button>
+
             <textarea
               v-model="messageInput"
               @keydown.enter.exact="handleKeydownEnter"
@@ -170,12 +243,13 @@
               @compositionend="onCompositionEnd"
               placeholder="Type a message..."
               rows="1"
-              class="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+              :disabled="uploading"
+              class="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
               style="max-height: 120px"
             ></textarea>
             <button
               @click="handleSend"
-              :disabled="!messageInput.trim()"
+              :disabled="!messageInput.trim() || uploading"
               class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Send
@@ -230,20 +304,42 @@
       @close="closeLeaveGroupDialog"
       @success="handleLeaveGroupSuccess"
     />
+
+    <!-- File Preview Modals -->
+    <ImagePreviewModal
+      :is-open="isImagePreviewOpen"
+      :image-url="previewFileUrl"
+      :file-name="previewFileName"
+      :downloading="isDownloading"
+      @close="closeImagePreview"
+      @download="handleDownload"
+    />
+
+    <FileInfoModal
+      :is-open="isFileInfoOpen"
+      :file-url="previewFileUrl"
+      :file-name="previewFileName"
+      :downloading="isDownloading"
+      @close="closeFileInfo"
+      @download="handleDownload"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, nextTick, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
+import { open } from '@tauri-apps/plugin-dialog';
 import { useChatDisplay } from '../composables/chat/useChatDisplay';
 import { useRelationsDisplay } from '../composables/useRelationsDisplay';
 import { useRelationActions } from '../composables/useRelationActions';
 import { useUserProfileDisplay } from '../composables/useUserProfileDisplay';
+import { useFileUpload } from '../composables/chat/useFileUpload';
 import { getConversationDisplayName, getConversationAvatar } from '../types/chat';
 import type { ConversationDisplay } from '../types/chat';
 import { MessageType } from '../types/chat';
 import { formatMessageTime, formatMessageDate } from '../utils/dateFormat';
+import { isImageFile, downloadFile, extractFileName } from '../utils/fileUtils';
 import ConversationItem from '../components/chat/ConversationItem.vue';
 import EmptyView from '../components/views/EmptyView.vue';
 import CommandMessage from '../components/chat/CommandMessage.vue';
@@ -252,6 +348,10 @@ import InviteMembersDialog from '../components/group/InviteMembersDialog.vue';
 import ViewMembersDialog from '../components/group/ViewMembersDialog.vue';
 import EditGroupDialog from '../components/group/EditGroupDialog.vue';
 import LeaveGroupDialog from '../components/group/LeaveGroupDialog.vue';
+import ImageMessageBubble from '../components/chat/ImageMessageBubble.vue';
+import FileMessageBubble from '../components/chat/FileMessageBubble.vue';
+import ImagePreviewModal from '../components/chat/ImagePreviewModal.vue';
+import FileInfoModal from '../components/chat/FileInfoModal.vue';
 import defaultAvatarUrl from '../assets/default-avatar.svg';
 
 defineOptions({
@@ -270,6 +370,15 @@ const { relationsMap, friends } = useRelationsDisplay();
 
 // Relation actions (for banner actions)
 const { addFriend, blockUser } = useRelationActions();
+
+// File upload
+const { uploading, uploadProgress, progressPercent, uploadFile } = useFileUpload();
+
+// File preview modal state
+const isImagePreviewOpen = ref(false);
+const isFileInfoOpen = ref(false);
+const previewFileUrl = ref('');
+const previewFileName = ref('');
 
 // Group dialog states
 const isInviteMembersDialogOpen = ref(false);
@@ -540,6 +649,125 @@ async function handleSend() {
   }
 }
 
+// Handle file attachment button click
+async function handleAttachFile() {
+  if (uploading.value || !currentUserId.value) {
+    return;
+  }
+
+  // Must have either a selected conversation or a target user
+  if (!selectedConversation.value && !targetUserId.value) {
+    return;
+  }
+
+  try {
+    // Open native file picker
+    const filePath = await open({
+      multiple: false,
+      directory: false,
+    });
+
+    if (!filePath) {
+      console.log('[ChatView] File picker cancelled');
+      return;
+    }
+
+    console.log('[ChatView] Selected file:', filePath);
+
+    // Upload the file
+    const fileUrl = await uploadFile(filePath);
+    const fileName = extractFileName(filePath);
+
+    // Send file message
+    const conversationId = selectedConversation.value?.conversationId || '';
+    const groupId = selectedConversation.value?.groupId || null;
+    const receiverId = groupId ? null : (selectedConversation.value?.peerId || targetUserId.value || '');
+
+    await sendFileMessage(
+      currentUserId.value,
+      conversationId,
+      receiverId,
+      groupId,
+      fileUrl,
+      fileName
+    );
+
+    // Clear targetUserId after sending first message
+    if (targetUserId.value) {
+      console.log('First file message sent to user:', targetUserId.value);
+      targetUserId.value = null;
+    }
+
+    // Auto scroll on send
+    await nextTick();
+    scrollToBottom();
+  } catch (error) {
+    console.error('[ChatView] Failed to send file:', error);
+  }
+}
+
+// Send file message (separate from text message)
+async function sendFileMessage(
+  senderId: string,
+  conversationId: string,
+  receiverId: string | null,
+  groupId: string | null,
+  fileUrl: string,
+  fileName: string
+) {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('send_message', {
+    senderId,
+    conversationId,
+    receiverId,
+    groupId,
+    text: null,
+    fileUrl,
+    fileName,
+  });
+}
+
+// Open image preview modal
+function openImagePreview(url: string, name: string) {
+  previewFileUrl.value = url;
+  previewFileName.value = name;
+  isImagePreviewOpen.value = true;
+}
+
+// Open file info modal
+function openFileInfo(url: string, name: string) {
+  previewFileUrl.value = url;
+  previewFileName.value = name;
+  isFileInfoOpen.value = true;
+}
+
+// Close preview modals
+function closeImagePreview() {
+  isImagePreviewOpen.value = false;
+}
+
+function closeFileInfo() {
+  isFileInfoOpen.value = false;
+}
+
+// Handle file download
+const isDownloading = ref(false);
+
+async function handleDownload(url: string, name: string) {
+  if (isDownloading.value) return;
+
+  isDownloading.value = true;
+  try {
+    await downloadFile(url, name);
+    // Download completed (user saved the file)
+  } catch (error) {
+    console.error('[ChatView] Download failed:', error);
+    alert('Download failed');
+  } finally {
+    isDownloading.value = false;
+  }
+}
+
 // Handle add friend from banner
 async function handleAddFriendFromBanner() {
   const peerId = selectedConversation.value?.peerId || targetUserId.value;
@@ -681,6 +909,16 @@ watch(
   },
   { deep: true }
 );
+
+// Auto-scroll to bottom when upload placeholder appears
+watch(uploading, async (isUploading) => {
+  if (isUploading) {
+    await nextTick();
+    requestAnimationFrame(() => {
+      scrollToBottom();
+    });
+  }
+});
 
 function onImageError(event: Event) {
   const img = event.target as HTMLImageElement;

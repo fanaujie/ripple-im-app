@@ -825,3 +825,84 @@ pub struct GroupSyncResponse {
     pub message: String,
     pub data: GroupSyncData,
 }
+
+// ==================== Attachment Upload Types ====================
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct InitiateUploadRequest {
+    #[serde(rename = "fileSize")]
+    pub file_size: i64,
+    #[serde(rename = "fileSha256")]
+    pub file_sha256: String,
+    #[serde(rename = "originalFilename")]
+    pub original_filename: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct InitiateUploadData {
+    #[serde(rename = "uploadMode")]
+    pub upload_mode: i32,
+    #[serde(rename = "chunkSize")]
+    pub chunk_size: Option<i64>,
+    #[serde(rename = "totalChunks")]
+    pub total_chunks: Option<i32>,
+    #[serde(rename = "startChunkNumber")]
+    pub start_chunk_number: Option<i32>,
+    #[serde(rename = "objectName")]
+    pub object_name: Option<String>,
+    #[serde(rename = "fileUrl")]
+    pub file_url: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct InitiateUploadResponse {
+    pub code: i32,
+    pub message: String,
+    pub data: Option<InitiateUploadData>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct CompleteUploadData {
+    #[serde(rename = "fileUrl")]
+    pub file_url: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct SingleUploadResponse {
+    pub code: i32,
+    pub message: String,
+    pub data: Option<CompleteUploadData>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ChunkUploadResponse {
+    pub code: i32,
+    pub message: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct CompleteUploadRequest {
+    #[serde(rename = "objectName")]
+    pub object_name: String,
+    #[serde(rename = "totalChunks")]
+    pub total_chunks: i32,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct CompleteUploadResponse {
+    pub code: i32,
+    pub message: String,
+    pub data: Option<CompleteUploadData>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct AbortUploadRequest {
+    #[serde(rename = "objectName")]
+    pub object_name: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct AbortUploadResponse {
+    pub code: i32,
+    pub message: String,
+}

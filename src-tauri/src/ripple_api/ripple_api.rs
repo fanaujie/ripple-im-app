@@ -1,12 +1,14 @@
 use crate::ripple_api::api_paths::ApiPaths;
 use crate::ripple_api::api_response::{
-    AddFriendRequest, BlockUserRequest, CommonResponse, ConversationSummariesResponse,
-    ConversationSyncResponse, ConversationsResponse, CreateGroupRequest, CreateGroupResponse,
-    GetGroupMembersResponse, GetUserGroupsResponse, GroupSyncResponse, InviteGroupMemberRequest,
+    AbortUploadRequest, AbortUploadResponse, AddFriendRequest, BlockUserRequest,
+    ChunkUploadResponse, CommonResponse, CompleteUploadRequest, CompleteUploadResponse,
+    ConversationSummariesResponse, ConversationSyncResponse, ConversationsResponse,
+    CreateGroupRequest, CreateGroupResponse, GetGroupMembersResponse, GetUserGroupsResponse,
+    GroupSyncResponse, InitiateUploadRequest, InitiateUploadResponse, InviteGroupMemberRequest,
     MessageResponse, ReadMessagesResponse, RelationsPageResponse, RelationsSyncResponse,
-    SendMessageRequest, UpdateBlockedUserRequest, UpdateFriendRequest, UpdateGroupRequest,
-    UpdateProfileRequest, UpdateReadPositionRequest, UploadImageResponse, UserGroupSyncResponse,
-    UserProfileResponse,
+    SendMessageRequest, SingleUploadResponse, UpdateBlockedUserRequest, UpdateFriendRequest,
+    UpdateGroupRequest, UpdateProfileRequest, UpdateReadPositionRequest, UploadImageResponse,
+    UserGroupSyncResponse, UserProfileResponse,
 };
 use crate::ripple_api::oauth_client::OauthClient;
 use crate::store_engine::StoreEngine;
@@ -998,5 +1000,176 @@ where
             )
             .await?;
         Ok(res.json::<UserGroupSyncResponse>().await?)
+    }
+
+    // ==================== Attachment Upload APIs ====================
+
+    /// Initiate attachment upload - returns upload mode and metadata
+    pub async fn initiate_attachment_upload(
+        &self,
+        file_size: i64,
+        file_sha256: String,
+        original_filename: String,
+    ) -> anyhow::Result<InitiateUploadResponse> {
+        let request_body = InitiateUploadRequest {
+            file_size,
+            file_sha256,
+            original_filename,
+        };
+
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let request_body = request_body.clone();
+                    async move {
+                        self.reqwest_client
+                            .post(&self.api_paths.attachment_initiate)
+                            .header("Authorization", format!("Bearer {}", access_token))
+                            .header("Content-Type", "application/json")
+                            .json(&request_body)
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to initiate attachment upload: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<InitiateUploadResponse>().await?)
+    }
+
+    /// Upload attachment in single request (for files <5MB)
+    pub async fn upload_attachment_single(
+        &self,
+        object_name: String,
+        file_sha256: String,
+        file_data: Vec<u8>,
+        original_filename: String,
+    ) -> anyhow::Result<SingleUploadResponse> {
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let file_data = file_data.clone();
+                    let object_name = object_name.clone();
+                    let file_sha256 = file_sha256.clone();
+                    let original_filename = original_filename.clone();
+                    async move {
+                        let part = reqwest::multipart::Part::bytes(file_data)
+                            .file_name(original_filename);
+                        let form = reqwest::multipart::Form::new().part("file", part);
+                        self.reqwest_client
+                            .put(&self.api_paths.attachment_single)
+                            .header("Authorization", format!("Bearer {}", access_token))
+                            .query(&[("objectName", &object_name), ("fileSha256", &file_sha256)])
+                            .multipart(form)
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to upload attachment single: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<SingleUploadResponse>().await?)
+    }
+
+    /// Upload a single chunk (for chunked upload)
+    pub async fn upload_attachment_chunk(
+        &self,
+        object_name: String,
+        chunk_number: i32,
+        chunk_sha256: String,
+        chunk_data: Vec<u8>,
+    ) -> anyhow::Result<ChunkUploadResponse> {
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let chunk_data = chunk_data.clone();
+                    let object_name = object_name.clone();
+                    let chunk_sha256 = chunk_sha256.clone();
+                    async move {
+                        let part = reqwest::multipart::Part::bytes(chunk_data)
+                            .file_name("chunk")
+                            .mime_str("application/octet-stream")
+                            .unwrap();
+                        let form = reqwest::multipart::Form::new().part("chunk", part);
+                        self.reqwest_client
+                            .put(&self.api_paths.attachment_chunk)
+                            .header("Authorization", format!("Bearer {}", access_token))
+                            .query(&[
+                                ("objectName", object_name.as_str()),
+                                ("chunkNumber", &chunk_number.to_string()),
+                                ("chunkSha256", chunk_sha256.as_str()),
+                            ])
+                            .multipart(form)
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to upload attachment chunk: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<ChunkUploadResponse>().await?)
+    }
+
+    /// Complete chunked upload - merge all chunks
+    pub async fn complete_attachment_upload(
+        &self,
+        object_name: String,
+        total_chunks: i32,
+    ) -> anyhow::Result<CompleteUploadResponse> {
+        let request_body = CompleteUploadRequest {
+            object_name,
+            total_chunks,
+        };
+
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let request_body = request_body.clone();
+                    async move {
+                        self.reqwest_client
+                            .post(&self.api_paths.attachment_complete)
+                            .header("Authorization", format!("Bearer {}", access_token))
+                            .header("Content-Type", "application/json")
+                            .json(&request_body)
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to complete attachment upload: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<CompleteUploadResponse>().await?)
+    }
+
+    /// Abort chunked upload - cleanup uploaded chunks
+    pub async fn abort_attachment_upload(
+        &self,
+        object_name: String,
+    ) -> anyhow::Result<AbortUploadResponse> {
+        let request_body = AbortUploadRequest { object_name };
+
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let request_body = request_body.clone();
+                    async move {
+                        self.reqwest_client
+                            .delete(&self.api_paths.attachment_abort)
+                            .header("Authorization", format!("Bearer {}", access_token))
+                            .header("Content-Type", "application/json")
+                            .json(&request_body)
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to abort attachment upload: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<AbortUploadResponse>().await?)
     }
 }
