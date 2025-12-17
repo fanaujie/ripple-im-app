@@ -11,6 +11,16 @@ use crate::ripple_ws::sync_aware_ws_message_handler::PushNotification;
 use crate::store_engine::store_engine::RippleStorage;
 use ripple_proto::ripple_pb::{push_message_request, PushMessageRequest};
 
+const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico"];
+
+fn is_image_file(file_name: &str) -> bool {
+    if let Some(ext) = file_name.rsplit('.').next() {
+        IMAGE_EXTENSIONS.contains(&ext.to_lowercase().as_str())
+    } else {
+        false
+    }
+}
+
 #[derive(Clone)]
 pub struct RippleWsSyncHandler<S, E>
 where
@@ -179,10 +189,46 @@ where
         if storage_message.message_type == MessageItemType::Command {
             self.handle_group_command(&push_req, &storage_message).await;
         }
-        let message = match storage_message.message_type {
-            MessageItemType::Text => storage_message.text.clone().unwrap(),
-            MessageItemType::Command => storage_message.command_data.clone().unwrap(),
-            _ => panic!("[RippleWsSyncHandler] Unsupported message type"),
+        // Generate message preview for conversation list
+        // For file messages: "{nickName} sent an image/file"
+        // For text messages: show text content
+        let message = if let Some(file_name) = &storage_message.file_name {
+            if !file_name.is_empty() {
+                // Get sender's name for file message preview
+                let sender_name = self
+                    .data_sync
+                    .get_sender_name(
+                        &storage_message.sender_id,
+                        storage_message.group_id.as_deref(),
+                    )
+                    .await
+                    .unwrap_or_else(|| "Someone".to_string());
+
+                // File message: "{nickName} sent an image/file"
+                if is_image_file(file_name) {
+                    format!("{} sent an image", sender_name)
+                } else {
+                    format!("{} sent a file", sender_name)
+                }
+            } else {
+                // Empty file_name, fall back to text or command
+                match storage_message.message_type {
+                    MessageItemType::Text => storage_message.text.clone().unwrap_or_default(),
+                    MessageItemType::Command => {
+                        storage_message.command_data.clone().unwrap_or_default()
+                    }
+                    _ => String::new(),
+                }
+            }
+        } else {
+            // No file, use text or command content
+            match storage_message.message_type {
+                MessageItemType::Text => storage_message.text.clone().unwrap_or_default(),
+                MessageItemType::Command => {
+                    storage_message.command_data.clone().unwrap_or_default()
+                }
+                _ => String::new(),
+            }
         };
         if let Err(e) = self.emitter.emit_conversations_received(
             storage_message.conversation_id.clone(),
@@ -209,135 +255,6 @@ where
             );
         }
     }
-
-    //     async fn handle_user_groups_update_sync(&self, push_notification: PushNotification) {
-    //         println!(
-    //             "[RippleWsSyncHandler] Handling user groups update sync for user ID: {}",
-    //             push_notification.send_user_id
-    //         );
-    //         if let Ok(result) = self.data_sync.process_user_groups_sync(true).await {
-    //             match result {
-    //                 Some(UserGroupSyncResult::FullSync { groups }) => {
-    //                     self.emitter.emit_user_groups_clear_all().unwrap_or_else(|e| {
-    //                         eprintln!(
-    //                             "[RippleWsSyncHandler] Failed to emit user groups clear all event: {}",
-    //                             e
-    //                         );
-    //                     });
-    //                     for group in groups {
-    //                         self.emitter.emit_user_group_insert(group).unwrap_or_else(|e| {
-    //                             eprintln!(
-    //                                 "[RippleWsSyncHandler] Failed to emit user group insert event: {}",
-    //                                 e
-    //                             );
-    //                         });
-    //                     }
-    //                 }
-    //                 Some(UserGroupSyncResult::IncrementalSync {
-    //                     insert,
-    //                     update,
-    //                     delete,
-    //                 }) => {
-    //                     for group in insert {
-    //                         self.emitter.emit_user_group_insert(group).unwrap_or_else(|e| {
-    //                             eprintln!(
-    //                                 "[RippleWsSyncHandler] Failed to emit user group insert event: {}",
-    //                                 e
-    //                             );
-    //                         });
-    //                     }
-    //                     for group in update {
-    //                         self.emitter.emit_user_group_update(group).unwrap_or_else(|e| {
-    //                             eprintln!(
-    //                                 "[RippleWsSyncHandler] Failed to emit user group update event: {}",
-    //                                 e
-    //                             );
-    //                         });
-    //                     }
-    //                     for group_id in delete {
-    //                         self.emitter
-    //                             .emit_user_group_delete(group_id)
-    //                             .unwrap_or_else(|e| {
-    //                                 eprintln!(
-    //                                     "[RippleWsSyncHandler] Failed to emit user group delete event: {}",
-    //                                     e
-    //                                 );
-    //                             });
-    //                     }
-    //                 }
-    //                 Some(UserGroupSyncResult::NoChange) | None => {
-    //                     println!("[RippleWsSyncHandler] No user group changes");
-    //                 }
-    //             }
-    //         } else {
-    //             eprintln!("[RippleWsSyncHandler] Failed to sync user groups");
-    //         }
-    //     }
-    //
-    //     async fn handle_group_members_update_sync(&self, group_id: String, push_notification: PushNotification) {
-    //         println!(
-    //             "[RippleWsSyncHandler] Handling group members update sync for group ID: {}, user ID: {}",
-    //             group_id, push_notification.send_user_id
-    //         );
-    //         if let Ok(result) = self.data_sync.process_group_members_sync(&group_id, true).await {
-    //             match result {
-    //                 Some(GroupMemberSyncResult::FullSync { group_id, members }) => {
-    //                     self.emitter.emit_group_members_clear_all(&group_id).unwrap_or_else(|e| {
-    //                         eprintln!(
-    //                             "[RippleWsSyncHandler] Failed to emit group members clear all event: {}",
-    //                             e
-    //                         );
-    //                     });
-    //                     for member in members {
-    //                         self.emitter.emit_group_member_insert(&group_id, member).unwrap_or_else(|e| {
-    //                             eprintln!(
-    //                                 "[RippleWsSyncHandler] Failed to emit group member insert event: {}",
-    //                                 e
-    //                             );
-    //                         });
-    //                     }
-    //                 }
-    //                 Some(GroupMemberSyncResult::IncrementalSync {
-    //                     group_id,
-    //                     insert,
-    //                     update,
-    //                     delete,
-    //                 }) => {
-    //                     for member in insert {
-    //                         self.emitter.emit_group_member_insert(&group_id, member).unwrap_or_else(|e| {
-    //                             eprintln!(
-    //                                 "[RippleWsSyncHandler] Failed to emit group member insert event: {}",
-    //                                 e
-    //                             );
-    //                         });
-    //                     }
-    //                     for member in update {
-    //                         self.emitter.emit_group_member_update(&group_id, member).unwrap_or_else(|e| {
-    //                             eprintln!(
-    //                                 "[RippleWsSyncHandler] Failed to emit group member update event: {}",
-    //                                 e
-    //                             );
-    //                         });
-    //                     }
-    //                     for user_id in delete {
-    //                         self.emitter
-    //                             .emit_group_member_delete(&group_id, user_id)
-    //                             .unwrap_or_else(|e| {
-    //                                 eprintln!(
-    //                                     "[RippleWsSyncHandler] Failed to emit group member delete event: {}",
-    //                                     e
-    //                                 );
-    //                             });
-    //                     }
-    //                 }
-    //                 Some(GroupMemberSyncResult::NoChange) | None => {
-    //                     println!("[RippleWsSyncHandler] No group member changes");
-    //                 }
-    //             }
-    //         } else {
-    //             eprintln!("[RippleWsSyncHandler] Failed to sync group members");
-    //         }
-    //     }
 }
 
 impl<S, E> RippleWsSyncHandler<S, E>

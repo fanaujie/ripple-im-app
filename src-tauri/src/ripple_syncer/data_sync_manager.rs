@@ -486,7 +486,8 @@ impl<S: RippleStorage> DataSyncManager<S> {
             } else {
                 println!(
                     "[DataSyncManager] Cache hit (no gap) for {}: {} messages",
-                    conversation_id, storage_messages.len()
+                    conversation_id,
+                    storage_messages.len()
                 );
             }
             return Ok(ReadMessagesData {
@@ -995,6 +996,21 @@ impl<S: RippleStorage> DataSyncManager<S> {
 
     pub async fn clear_group_members(&self, group_id: &str) -> anyhow::Result<()> {
         self.store_engine.clear_group_members(group_id).await
+    }
+
+    pub async fn get_sender_name(&self, sender_id: &str, group_id: Option<&str>) -> Option<String> {
+        if let Some(gid) = group_id {
+            // Group chat: look up from group members
+            if let Ok(Some(member)) = self.store_engine.get_group_member(gid, sender_id).await {
+                return Some(member.name);
+            }
+        }
+        // 1v1 chat or group member not found: look up from relations
+        if let Ok(Some(relation)) = self.store_engine.get_relation(sender_id).await {
+            // Prefer remark_name over nick_name
+            return Some(relation.remark_name.unwrap_or(relation.nick_name));
+        }
+        None
     }
 
     fn to_group_member_storage_action(

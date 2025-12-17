@@ -251,6 +251,7 @@ pub trait StoreEngine: Sync + Clone + 'static {
         need_result: bool,
     ) -> anyhow::Result<Option<GroupMemberData>>;
     async fn get_all_group_members(&self, group_id: &str) -> anyhow::Result<Vec<GroupMemberData>>;
+    async fn get_group_member(&self, group_id: &str, user_id: &str) -> anyhow::Result<Option<GroupMemberData>>;
     async fn get_group_member_version(&self, group_id: &str) -> anyhow::Result<Option<String>>;
     async fn clear_group_members(&self, group_id: &str) -> anyhow::Result<()>;
 }
@@ -921,6 +922,14 @@ impl RippleStorage for MemoryStore {
         match inner.group_members.get(group_id) {
             Some(members) => Ok(members.values().cloned().collect()),
             None => Ok(Vec::new()),
+        }
+    }
+
+    async fn get_group_member(&self, group_id: &str, user_id: &str) -> anyhow::Result<Option<GroupMemberData>> {
+        let inner = self.inner.lock().await;
+        match inner.group_members.get(group_id) {
+            Some(members) => Ok(members.get(user_id).cloned()),
+            None => Ok(None),
         }
     }
 

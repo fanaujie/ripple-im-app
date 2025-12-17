@@ -154,29 +154,42 @@
                 </div>
               </template>
 
-              <!-- Received messages: content on left, timestamp on right -->
+              <!-- Received messages: avatar, content, timestamp -->
               <template v-else>
-                <!-- Image message -->
-                <ImageMessageBubble
-                  v-if="message.fileUrl && isImageFile(message.fileName)"
-                  :file-url="message.fileUrl"
-                  :file-name="message.fileName || ''"
-                  :is-self="false"
-                  @preview="openImagePreview"
+                <!-- Sender Avatar (aligned to top with sender name) -->
+                <img
+                  :src="getMessageSenderAvatarUrl(message.senderId)"
+                  @error="onImageError"
+                  class="w-8 h-8 rounded-full object-cover flex-shrink-0 self-start"
                 />
-                <!-- File message -->
-                <FileMessageBubble
-                  v-else-if="message.fileUrl"
-                  :file-url="message.fileUrl"
-                  :file-name="message.fileName || ''"
-                  :is-self="false"
-                  @preview="openFileInfo"
-                />
-                <!-- Text message -->
-                <div v-else class="max-w-md px-4 py-2 rounded-2xl bg-white text-gray-900">
-                  <div>{{ message.text }}</div>
+                <!-- Message content with optional sender name -->
+                <div class="flex flex-col">
+                  <!-- Sender name (only for group chats) -->
+                  <div v-if="isGroupChat" class="text-xs text-gray-500 mb-1">
+                    {{ getMessageSenderName(message.senderId) }}
+                  </div>
+                  <!-- Image message -->
+                  <ImageMessageBubble
+                    v-if="message.fileUrl && isImageFile(message.fileName)"
+                    :file-url="message.fileUrl"
+                    :file-name="message.fileName || ''"
+                    :is-self="false"
+                    @preview="openImagePreview"
+                  />
+                  <!-- File message -->
+                  <FileMessageBubble
+                    v-else-if="message.fileUrl"
+                    :file-url="message.fileUrl"
+                    :file-name="message.fileName || ''"
+                    :is-self="false"
+                    @preview="openFileInfo"
+                  />
+                  <!-- Text message -->
+                  <div v-else class="max-w-md px-4 py-2 rounded-2xl bg-white text-gray-900">
+                    <div>{{ message.text }}</div>
+                  </div>
                 </div>
-                <div class="text-xs text-gray-400 pb-1 whitespace-nowrap">
+                <div class="text-xs text-gray-400 pb-1 whitespace-nowrap self-end">
                   {{ formatMessageTime(message.sendTimestamp) }}
                 </div>
               </template>
@@ -335,6 +348,7 @@ import { useRelationsDisplay } from '../composables/useRelationsDisplay';
 import { useRelationActions } from '../composables/useRelationActions';
 import { useUserProfileDisplay } from '../composables/useUserProfileDisplay';
 import { useFileUpload } from '../composables/chat/useFileUpload';
+import { useGroupMembersCache, type SenderInfo } from '../composables/chat/useGroupMembersCache';
 import { getConversationDisplayName, getConversationAvatar } from '../types/chat';
 import type { ConversationDisplay } from '../types/chat';
 import { MessageType } from '../types/chat';
@@ -373,6 +387,9 @@ const { addFriend, blockUser } = useRelationActions();
 
 // File upload
 const { uploading, uploadProgress, progressPercent, uploadFile } = useFileUpload();
+
+// Group members cache for sender avatars
+const { fetchGroupMembers, getSenderInfo } = useGroupMembersCache();
 
 // File preview modal state
 const isImagePreviewOpen = ref(false);
@@ -451,6 +468,53 @@ function shouldShowDateSeparator(index: number): boolean {
 
   // Compare dates using formatted date string
   return formatMessageDate(currentMsg.sendTimestamp) !== formatMessageDate(prevMsg.sendTimestamp);
+}
+
+/**
+ * Get sender info for a received message
+ * - For 1v1 chats: returns peer avatar (no name needed)
+ * - For group chats: returns sender avatar and name from cache
+ */
+function getMessageSenderInfo(senderId: string): SenderInfo | undefined {
+  if (!selectedConversation.value) return undefined;
+
+  // For group chats, lookup from group members cache
+  if (selectedConversation.value.groupId) {
+    return getSenderInfo(selectedConversation.value.groupId, senderId);
+  }
+
+  // For 1v1 chats, use peer profile from conversation
+  const peerProfile = selectedConversation.value.peerProfile;
+  if (peerProfile) {
+    return {
+      name: peerProfile.remarkName || peerProfile.nickName,
+      avatar: peerProfile.avatar,
+    };
+  }
+
+  return undefined;
+}
+
+/**
+ * Get avatar URL for a message sender
+ */
+function getMessageSenderAvatarUrl(senderId: string): string {
+  const senderInfo = getMessageSenderInfo(senderId);
+  if (!senderInfo?.avatar) return defaultAvatarUrl;
+
+  const avatar = senderInfo.avatar;
+  if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+    return avatar;
+  }
+  return `asset://localhost/${avatar}`;
+}
+
+/**
+ * Get sender name for group chat messages
+ */
+function getMessageSenderName(senderId: string): string {
+  const senderInfo = getMessageSenderInfo(senderId);
+  return senderInfo?.name || 'Unknown';
 }
 
 // Selected conversation display
@@ -570,6 +634,14 @@ async function selectConversation(conversation: ConversationDisplay) {
 
   // Update active conversation (clears old messages, loads new ones with optimization)
   try {
+    // For group chats, prefetch group members for sender avatar display
+    if (conversation.groupId) {
+      // Fire and forget - don't block conversation loading
+      fetchGroupMembers(conversation.groupId).catch((err) => {
+        console.warn('[ChatView] Failed to prefetch group members:', err);
+      });
+    }
+
     // setActiveConversation returns whether there might be more older messages
     const mightHaveMore = await setActiveConversation(conversation.conversationId);
     hasMoreMessages.value = mightHaveMore;
