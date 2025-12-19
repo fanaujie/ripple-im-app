@@ -69,11 +69,15 @@ onMounted(async () => {
     const exist = await invoke('exists_token');
     if (exist) {
       try {
+        // Resume existing session (initialize sync and WebSocket)
+        console.log('Token found, resuming session...');
+        await invoke('resume_session');
+        console.log('Session resumed, navigating to home');
         await router.replace({name: 'home'});
       } catch (err: any) {
-        console.error('Failed to navigate to home:', err);
-        await message(`Failed to navigate to home: ${err?.message ?? err}`, {
-          title: 'Navigation Error',
+        console.error('Failed to resume session:', err);
+        await message(`Failed to resume session: ${err?.message ?? err}`, {
+          title: 'Session Error',
           kind: 'error'
         });
       }

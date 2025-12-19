@@ -23,12 +23,17 @@ use ripple_api::oauth_client::OauthClient;
 use server::Server;
 use std::fs;
 use std::path::PathBuf;
+#[cfg(feature = "memory-store")]
 use store_engine::store_engine::MemoryStore;
+#[cfg(feature = "sqlite-store")]
+use store_engine::SqliteStore;
 use tauri::path::BaseDirectory;
 use tauri::Manager;
 
-// #[cfg(feature = "memory-store")]
+#[cfg(feature = "memory-store")]
 type DefaultStoreEngine = MemoryStore;
+#[cfg(feature = "sqlite-store")]
+type DefaultStoreEngine = SqliteStore;
 
 // Type aliases for complex generic types
 type DefaultSyncHandler = RippleWsSyncHandler<DefaultStoreEngine, DefaultEventEmitter>;
@@ -44,6 +49,12 @@ pub fn run() {
     tauri::Builder::default()
         .setup(move |app| {
             let app_data_dir = app.path().app_data_dir()?;
+            // Support multiple instances: if RIPPLE_INSTANCE is set, use a subdirectory
+            let app_data_dir = if let Ok(instance) = std::env::var("RIPPLE_INSTANCE") {
+                app_data_dir.join(format!("instance_{}", instance))
+            } else {
+                app_data_dir
+            };
             // Ensure the app data directory exists
             let _ = fs::create_dir_all(&app_data_dir).map_err(|e| {
                 format!(
@@ -56,11 +67,18 @@ pub fn run() {
                 .path()
                 .resolve(config_file_path, BaseDirectory::Resource)?;
             let app_config = parse_app_config(resource_path);
-            let reqwest_client = reqwest::ClientBuilder::new()
-                .redirect(reqwest::redirect::Policy::none())
-                .build()?;
+            let reqwest_client = {
+                let mut builder = reqwest::ClientBuilder::new()
+                    .redirect(reqwest::redirect::Policy::none());
+                // Optional HTTP proxy via environment variable
+                if let Ok(proxy_url) = std::env::var("RIPPLE_HTTP_PROXY") {
+                    println!("[lib] Using HTTP proxy: {}", proxy_url);
+                    builder = builder.proxy(reqwest::Proxy::http(&proxy_url)?);
+                }
+                builder.build()?
+            };
             let oauth_client = OauthClient::new(&app_config, reqwest_client.clone())?;
-            let store = create_store();
+            let store = create_store(app_data_dir.clone())?;
             let ripple_api = RippleApi::new(
                 app_config.upload_gateway_url.clone(),
                 app_config.api_gateway_url.clone(),
@@ -87,6 +105,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             commands::exists_token,
+            commands::resume_session,
             commands::start_server,
             commands::stop_server,
             commands::open_signup_url,
@@ -130,7 +149,14 @@ fn parse_app_config(resource_path: PathBuf) -> AppConfig {
     app_config
 }
 
-// #[cfg(feature = "memory-store")]
-fn create_store() -> DefaultStoreEngine {
-    MemoryStore::new()
+#[cfg(feature = "memory-store")]
+fn create_store(_app_data_dir: PathBuf) -> anyhow::Result<DefaultStoreEngine> {
+    Ok(MemoryStore::new())
+}
+
+#[cfg(feature = "sqlite-store")]
+fn create_store(app_data_dir: PathBuf) -> anyhow::Result<DefaultStoreEngine> {
+    let store =
+        tauri::async_runtime::block_on(async move { SqliteStore::new(app_data_dir).await })?;
+    Ok(store)
 }

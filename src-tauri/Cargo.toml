@@ -15,7 +15,7 @@ name = "ripple_im_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
-default = ["memory-store"]
+default = ["sqlite-store"]
 memory-store = []
 sqlite-store = []
 

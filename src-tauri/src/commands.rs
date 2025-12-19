@@ -7,7 +7,7 @@ use crate::ripple_api::RippleApi;
 use crate::ripple_syncer::event_emitter::UIConversations;
 use crate::ripple_syncer::DataSyncManager;
 use crate::server::Server;
-use crate::{errors, DefaultStoreEngine};
+use crate::{errors, DefaultStoreEngine, DefaultWsManager};
 use anyhow::anyhow;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -20,6 +20,31 @@ pub async fn exists_token(
     data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
 ) -> Result<bool, errors::CommandError> {
     Ok(data_sync.exists_token().await?)
+}
+
+#[tauri::command]
+pub async fn resume_session(app: AppHandle) -> Result<(), errors::CommandError> {
+    let data_sync = app.state::<DataSyncManager<DefaultStoreEngine>>();
+    match data_sync.check_and_clear_on_user_change().await {
+        Ok(cleared) => {
+            if cleared {
+                println!("[resume_session] User changed, all stored data has been cleared");
+            }
+        }
+        Err(e) => {
+            eprintln!("[resume_session] Failed to check user change: {}", e);
+        }
+    }
+    data_sync.init().await?;
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let ws_manager = app_handle.state::<DefaultWsManager>();
+        let config = app_handle.state::<AppConfig>();
+        if let Err(e) = ws_manager.start(&config.ws_gateway_url).await {
+            eprintln!("[resume_session] Failed to start WebSocket: {}", e);
+        }
+    });
+    Ok(())
 }
 
 #[tauri::command]
