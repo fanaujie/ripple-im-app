@@ -240,7 +240,7 @@ export interface ConversationReceivedMessageEvent {
   conversationId: string;
   /** Updated unread count for the conversation */
   unreadCount: number;
-  /** Message content preview (text or description) */
+  /** Message content preview (may contain {{userId}} template for personalization) */
   message: string;
   /** Message timestamp (UTC seconds as string) */
   timestamp: string;

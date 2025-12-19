@@ -619,7 +619,7 @@ const { userProfile } = useUserProfileDisplay();
 const currentUserId = computed(() => userProfile.value?.userId || '');
 
 // Chat display for groups (need conversations to filter groups)
-const { conversations } = useChatDisplay(relationsMap);
+const { conversations } = useChatDisplay(relationsMap, currentUserId);
 
 // Groups display
 const {

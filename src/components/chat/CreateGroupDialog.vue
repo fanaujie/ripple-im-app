@@ -20,45 +20,6 @@
 
       <!-- Body -->
       <div class="px-6 py-4 max-h-96 overflow-y-auto">
-        <!-- Group Avatar -->
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Group Avatar
-          </label>
-          <div class="flex items-center space-x-4">
-            <div class="relative">
-              <div class="w-16 h-16 rounded-full overflow-hidden bg-gray-200 border-2 border-gray-300 flex items-center justify-center">
-                <img
-                  v-if="groupAvatarPreview"
-                  :src="groupAvatarPreview"
-                  alt="Group Avatar"
-                  class="w-full h-full object-cover"
-                />
-                <svg v-else class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </div>
-            </div>
-            <button
-              @click="avatarPicker.selectFile()"
-              :disabled="isCreating"
-              type="button"
-              class="px-3 py-1.5 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {{ groupAvatarPreview ? 'Change' : 'Add Photo' }}
-            </button>
-            <button
-              v-if="groupAvatarPreview"
-              @click="removeAvatar"
-              :disabled="isCreating"
-              type="button"
-              class="px-3 py-1.5 text-sm text-red-600 border border-red-300 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Remove
-            </button>
-          </div>
-        </div>
-
         <!-- Group Name Input -->
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -140,14 +101,6 @@
         </button>
       </div>
     </div>
-
-    <!-- Avatar Cropper Dialog -->
-    <AvatarCropper
-      :is-open="avatarPicker.showPreviewDialog.value"
-      :image-src="avatarPicker.avatarPreview.value"
-      @close="avatarPicker.closePreview()"
-      @save="confirmAvatar"
-    />
   </div>
 </template>
 
@@ -155,8 +108,6 @@
 import { ref, computed, watch } from 'vue';
 import type { RelationUser } from '../../types/relations';
 import { useGroupActions } from '../../composables/chat/useGroupActions';
-import { useAvatarPicker } from '../../composables/useAvatarPicker';
-import AvatarCropper from '../common/AvatarCropper.vue';
 import defaultAvatarUrl from '../../assets/default-avatar.svg';
 
 defineOptions({
@@ -179,15 +130,12 @@ interface Emits {
 const emit = defineEmits<Emits>();
 
 const { createGroup } = useGroupActions();
-const avatarPicker = useAvatarPicker();
 
 // Form state
 const groupName = ref('');
 const selectedMemberIds = ref(new Set<string>());
 const isCreating = ref(false);
 const errorMessage = ref('');
-const groupAvatarPreview = ref<string>('');
-const pendingAvatarBlob = ref<Blob | null>(null);
 
 // Computed
 const isFormValid = computed(() => {
@@ -230,24 +178,6 @@ function resetForm() {
   selectedMemberIds.value = new Set();
   errorMessage.value = '';
   isCreating.value = false;
-  groupAvatarPreview.value = '';
-  pendingAvatarBlob.value = null;
-  avatarPicker.reset();
-}
-
-function confirmAvatar(blob: Blob) {
-  // Store blob for later upload after group creation
-  pendingAvatarBlob.value = blob;
-  groupAvatarPreview.value = URL.createObjectURL(blob);
-  avatarPicker.closePreview();
-}
-
-function removeAvatar() {
-  if (groupAvatarPreview.value.startsWith('blob:')) {
-    URL.revokeObjectURL(groupAvatarPreview.value);
-  }
-  groupAvatarPreview.value = '';
-  pendingAvatarBlob.value = null;
 }
 
 function handleClose() {
@@ -276,17 +206,6 @@ async function handleCreate() {
     });
 
     console.log('[CreateGroupDialog] Group created:', groupId);
-
-    // If avatar was selected, upload and update the group avatar
-    if (pendingAvatarBlob.value) {
-      try {
-        await avatarPicker.uploadGroupAvatarBlob(groupId, pendingAvatarBlob.value);
-        console.log('[CreateGroupDialog] Group avatar updated');
-      } catch (avatarError) {
-        console.error('[CreateGroupDialog] Failed to set group avatar:', avatarError);
-        // Don't fail the whole operation, group was created successfully
-      }
-    }
 
     // Keep dialog open with loading state
     // It will close automatically when WebSocket push event arrives

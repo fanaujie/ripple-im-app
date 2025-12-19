@@ -229,7 +229,7 @@ pub struct ConversationItem {
     pub last_read_message_id: Option<String>,
     #[serde(rename = "unreadCount")]
     pub unread_count: i64,
-    #[serde(rename = "lastMessage")]
+    #[serde(rename = "lastMessageText")]
     pub last_message_text: Option<String>,
     #[serde(rename = "lastMessageTimestamp")]
     pub last_message_timestamp: Option<i64>,

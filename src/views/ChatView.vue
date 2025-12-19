@@ -412,7 +412,7 @@ const {
   markConversationRead,
   getConversationMessages,
   setActiveConversation,
-} = useChatDisplay(relationsMap);
+} = useChatDisplay(relationsMap, currentUserId);
 
 // Selected conversation
 const selectedConversation = ref<ConversationDisplay | null>(null);

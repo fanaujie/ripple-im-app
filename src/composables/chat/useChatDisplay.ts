@@ -8,6 +8,7 @@ import { useConversationEvents } from './useConversationEvents';
 import { useMessageEvents } from './useMessageEvents';
 import { useChatActions } from './useChatActions';
 import type { RelationUser } from '../../types/relations';
+import { personalizeMessageText, type PersonalizationContext } from '../../utils/messagePersonalization';
 
 interface UIConversations {
   conversations: ConversationDisplay[];
@@ -23,9 +24,13 @@ interface UIConversations {
  * - Actions (send, mark read, load)
  *
  * @param relations - Map of userId to RelationUser for peer profile lookup
+ * @param currentUserId - Ref to current user's ID for message personalization
  * @returns Everything needed for chat UI
  */
-export function useChatDisplay(relations: Ref<Map<string, RelationUser>>) {
+export function useChatDisplay(
+  relations: Ref<Map<string, RelationUser>>,
+  currentUserId: Ref<string>
+) {
   const loading = ref(false);
   const error = ref<string | null>(null);
 
@@ -40,23 +45,58 @@ export function useChatDisplay(relations: Ref<Map<string, RelationUser>>) {
   const actions = useChatActions();
 
   /**
+   * Create personalization context for a conversation
+   * Note: Group members are looked up via relations for now.
+   * In the future, we could add group members cache integration here.
+   */
+  function createPersonalizationContext(): PersonalizationContext {
+    return {
+      currentUserId: currentUserId.value,
+      relations: relations.value,
+    };
+  }
+
+  /**
+   * Personalize lastMessage text for a conversation
+   */
+  function personalizeConversationMessage(conversation: ConversationDisplay): ConversationDisplay {
+    if (!conversation.lastMessage || !currentUserId.value) {
+      return conversation;
+    }
+
+    const context = createPersonalizationContext();
+    const personalizedMessage = personalizeMessageText(conversation.lastMessage, context);
+
+    return {
+      ...conversation,
+      lastMessage: personalizedMessage,
+    };
+  }
+
+  /**
    * Handle new message received event
    * If the message is for the active conversation, mark it as read immediately
    */
   function handleReceivedNewMessage(event: ConversationReceivedMessageEvent): void {
     const { conversationId, message, timestamp } = event;
 
+    // Find the conversation for unread count handling
+    const conversation = conversationsState.conversations.value.find(
+      c => c.conversationId === conversationId
+    );
+
+    // Personalize the message preview
+    const context = createPersonalizationContext();
+    const personalizedMessage = personalizeMessageText(message, context);
+
     // Always update the preview (lastMessage, lastMessageTimestamp)
     // But handle unreadCount differently based on whether this is the active conversation
     if (conversationId === activeConversationId.value) {
       // Active conversation: update preview but set unreadCount to 0
       // (we'll call markConversationRead when the message-updated event arrives with messageId)
-      const conversation = conversationsState.conversations.value.find(
-        c => c.conversationId === conversationId
-      );
       if (conversation) {
         const timestampMs = parseInt(timestamp, 10) * 1000;
-        conversation.lastMessage = message;
+        conversation.lastMessage = personalizedMessage;
         conversation.lastMessageTimestamp = timestampMs;
         // Set unreadCount to 0 since user is viewing this conversation
         conversation.unreadCount = 0;
@@ -64,7 +104,11 @@ export function useChatDisplay(relations: Ref<Map<string, RelationUser>>) {
       }
     } else {
       // Inactive conversation: use normal behavior (apply unreadCount from push)
-      conversationsState.handleReceivedNewMessage(event);
+      // But with personalized message
+      conversationsState.handleReceivedNewMessage({
+        ...event,
+        message: personalizedMessage,
+      });
     }
   }
 
@@ -107,10 +151,13 @@ export function useChatDisplay(relations: Ref<Map<string, RelationUser>>) {
   useMessageEvents(activeConversationId, handleMessageEvent);
 
   /**
-   * Sorted conversations (by last message time, descending)
+   * Sorted conversations with personalized lastMessage (by last message time, descending)
+   * Personalization is applied reactively when currentUserId or relations change
    */
   const sortedConversations = computed(() => {
-    return sortConversationsByTime(conversationsState.conversations.value);
+    const sorted = sortConversationsByTime(conversationsState.conversations.value);
+    // Apply personalization to each conversation's lastMessage
+    return sorted.map(personalizeConversationMessage);
   });
 
   /**

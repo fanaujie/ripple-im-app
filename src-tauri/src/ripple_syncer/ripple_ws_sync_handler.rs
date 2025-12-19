@@ -13,6 +13,7 @@ use ripple_proto::ripple_pb::{push_message_request, PushMessageRequest};
 
 const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico"];
 
+/// Check if a file is an image based on its extension
 fn is_image_file(file_name: &str) -> bool {
     if let Some(ext) = file_name.rsplit('.').next() {
         IMAGE_EXTENSIONS.contains(&ext.to_lowercase().as_str())
@@ -189,47 +190,13 @@ where
         if storage_message.message_type == MessageItemType::Command {
             self.handle_group_command(&push_req, &storage_message).await;
         }
-        // Generate message preview for conversation list
-        // For file messages: "{nickName} sent an image/file"
-        // For text messages: show text content
-        let message = if let Some(file_name) = &storage_message.file_name {
-            if !file_name.is_empty() {
-                // Get sender's name for file message preview
-                let sender_name = self
-                    .data_sync
-                    .get_sender_name(
-                        &storage_message.sender_id,
-                        storage_message.group_id.as_deref(),
-                    )
-                    .await
-                    .unwrap_or_else(|| "Someone".to_string());
 
-                // File message: "{nickName} sent an image/file"
-                if is_image_file(file_name) {
-                    format!("{} sent an image", sender_name)
-                } else {
-                    format!("{} sent a file", sender_name)
-                }
-            } else {
-                // Empty file_name, fall back to text or command
-                match storage_message.message_type {
-                    MessageItemType::Text => storage_message.text.clone().unwrap_or_default(),
-                    MessageItemType::Command => {
-                        storage_message.command_data.clone().unwrap_or_default()
-                    }
-                    _ => String::new(),
-                }
-            }
-        } else {
-            // No file, use text or command content
-            match storage_message.message_type {
-                MessageItemType::Text => storage_message.text.clone().unwrap_or_default(),
-                MessageItemType::Command => {
-                    storage_message.command_data.clone().unwrap_or_default()
-                }
-                _ => String::new(),
-            }
+        let message = match storage_message.message_type {
+            MessageItemType::Text => storage_message.text.clone().unwrap_or_default(),
+            MessageItemType::Command => storage_message.command_data.clone().unwrap_or_default(),
+            _ => String::new(),
         };
+
         if let Err(e) = self.emitter.emit_conversations_received(
             storage_message.conversation_id.clone(),
             unread_count,

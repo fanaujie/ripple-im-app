@@ -118,41 +118,32 @@ onBeforeUnmount(async () => {
 
 <template>
   <div class="login-container">
-    <div class="login-form">
-      <div class="header">
-        <h1 class="title">Welcome to Ripple!</h1>
-      </div>
+    <div class="login-card">
+      <h1 class="title">Welcome to Ripple!</h1>
 
-      <button
-          class="signup-btn"
-          @click="handleSignup"
-          :disabled="isSigningIn"
-          :class="{ disabled: isSigningIn }"
-      >
-        Sign up
-      </button>
-
-      <p class="signin-text">
-        Already have an account?
-        <a
-            href="#"
-            class="signin-link"
-            @click="handleSignin"
-            :class="{ disabled: isSigningIn }"
+      <div class="buttons">
+        <button
+            class="btn btn-primary"
+            @click="handleSignup"
+            :disabled="isSigningIn"
         >
-          <span v-if="!isSigningIn">Sign in</span>
-          <span v-else class="signing-in">
-            <span class="spinner"></span>
-            Signing in...
-          </span>
-        </a>
-      </p>
+          Sign up
+        </button>
+
+        <button
+            class="btn btn-secondary"
+            @click="handleSignin"
+            :disabled="isSigningIn"
+        >
+          Sign in
+        </button>
+      </div>
     </div>
 
     <!-- Loading overlay -->
     <div v-if="isSigningIn" class="loading-overlay">
       <div class="loading-content">
-        <div class="large-spinner"></div>
+        <div class="spinner"></div>
         <p>Signing you in...</p>
       </div>
     </div>
@@ -166,99 +157,66 @@ onBeforeUnmount(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #ffffff;
+  background-color: #f8fafc;
   padding: 20px;
 }
 
-.login-form {
+.login-card {
   background: #ffffff;
-  padding: 48px 40px;
+  padding: 48px;
   width: 100%;
   max-width: 400px;
   text-align: center;
-}
-
-.header {
-  margin-bottom: 48px;
-}
-
-.app-icon {
-  margin-bottom: 24px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .title {
   font-size: 32px;
-  font-weight: 600;
+  font-weight: 700;
   color: #1a1a1a;
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  margin: 0 0 40px 0;
 }
 
-.signup-btn {
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.btn {
   width: 100%;
-  background: #007AFF;
-  color: white;
-  border: none;
-  padding: 16px;
+  padding: 14px;
   border-radius: 8px;
   font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  margin-bottom: 24px;
-}
-
-.signup-btn:hover {
-  background: #0051D0;
-}
-
-.signin-text {
-  color: #6b7280;
-  font-size: 14px;
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-}
-
-.signin-link {
-  color: #007AFF;
-  text-decoration: none;
   font-weight: 500;
+  cursor: pointer;
 }
 
-.signin-link:hover {
-  text-decoration: underline;
+.btn-primary {
+  background: #2563eb;
+  color: white;
+  border: none;
 }
 
-.signup-btn.disabled {
-  background: #a0a0a0;
-  cursor: not-allowed;
+.btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.btn-secondary {
+  background: #ffffff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.btn:disabled {
   opacity: 0.6;
-}
-
-.signup-btn.disabled:hover {
-  background: #a0a0a0;
-}
-
-.signin-link.disabled {
-  color: #a0a0a0;
   cursor: not-allowed;
-  pointer-events: none;
-  text-decoration: none;
-}
-
-.signing-in {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid #e0e0e0;
-  border-top: 2px solid #007AFF;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
 }
 
 .loading-overlay {
@@ -267,7 +225,7 @@ onBeforeUnmount(async () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(248, 250, 252, 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -278,15 +236,16 @@ onBeforeUnmount(async () => {
   text-align: center;
   background: white;
   padding: 40px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.large-spinner {
+.spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid #e0e0e0;
-  border-top: 4px solid #007AFF;
+  border: 4px solid #e2e8f0;
+  border-top: 4px solid #2563eb;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 16px;
@@ -296,7 +255,6 @@ onBeforeUnmount(async () => {
   margin: 0;
   color: #6b7280;
   font-size: 16px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
 
 @keyframes spin {
