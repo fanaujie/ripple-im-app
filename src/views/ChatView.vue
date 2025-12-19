@@ -7,24 +7,14 @@
         <h1 class="text-2xl font-semibold">Chat</h1>
       </div>
 
-      <!-- Search -->
-      <div class="px-4 py-3">
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Search conversations..."
-          class="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
       <!-- Conversation List -->
       <div class="flex-1 overflow-y-auto">
         <div v-if="loading" class="p-8 text-center text-gray-500">Loading...</div>
-        <div v-else-if="filteredConversations.length === 0" class="p-8 text-center text-gray-500">
+        <div v-else-if="conversations.length === 0" class="p-8 text-center text-gray-500">
           No conversations
         </div>
         <ConversationItem
-          v-for="conv in filteredConversations"
+          v-for="conv in conversations"
           :key="conv.conversationId"
           :conversation="conv"
           @click="selectConversation"
@@ -416,7 +406,6 @@ const {
 
 // Selected conversation
 const selectedConversation = ref<ConversationDisplay | null>(null);
-const searchQuery = ref('');
 const messageInput = ref('');
 const isComposing = ref(false);
 const justFinishedComposing = ref(false);
@@ -437,18 +426,6 @@ const targetUserId = ref<string | null>(null);
 const targetUserInfo = computed(() => {
   if (!targetUserId.value) return null;
   return relationsMap.value.get(targetUserId.value) || null;
-});
-
-// Filtered conversations
-const filteredConversations = computed(() => {
-  if (!searchQuery.value.trim()) {
-    return conversations.value;
-  }
-  const query = searchQuery.value.toLowerCase();
-  return conversations.value.filter((conv) => {
-    const name = getConversationDisplayName(conv).toLowerCase();
-    return name.includes(query);
-  });
 });
 
 // Current messages for selected conversation

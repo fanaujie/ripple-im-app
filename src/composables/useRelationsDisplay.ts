@@ -1,4 +1,4 @@
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { RelationUser } from '../types/relations';
 import { useRelationEvents } from './useRelationEvents';
@@ -15,18 +15,16 @@ interface UIRelationData {
  * - Automatically loads initial data from backend
  * - Listens for real-time updates via Tauri events
  * - Provides reactive friends and blockedUsers lists
- * - Includes search functionality
  * - Handles loading and error states
  *
  * Usage:
  * ```typescript
- * const { friends, blockedUsers, loading, error, searchQuery, refresh } = useRelationsDisplay();
+ * const { friends, blockedUsers, loading, error, refresh } = useRelationsDisplay();
  * ```
  */
 export function useRelationsDisplay() {
   const loading = ref(false);
   const error = ref<string | null>(null);
-  const searchQuery = ref('');
 
   // Use state management composable
   const { friends, blockedUsers, relationsMap, handleInsert, handleUpdate, handleDelete, handleClearAll, initialize } = useRelationsState();
@@ -63,43 +61,6 @@ export function useRelationsDisplay() {
     }
   }
 
-  /**
-   * Filtered friends based on search query
-   * Searches in userId, nickName, and remarkName
-   */
-  const filteredFriends = computed(() => {
-    if (!searchQuery.value.trim()) {
-      return friends.value;
-    }
-
-    const query = searchQuery.value.toLowerCase();
-    return friends.value.filter((user) => {
-      return (
-        user.userId.toLowerCase().includes(query) ||
-        user.nickName.toLowerCase().includes(query) ||
-        user.remarkName.toLowerCase().includes(query)
-      );
-    });
-  });
-
-  /**
-   * Filtered blocked users based on search query
-   * Searches in userId and nickName
-   */
-  const filteredBlockedUsers = computed(() => {
-    if (!searchQuery.value.trim()) {
-      return blockedUsers.value;
-    }
-
-    const query = searchQuery.value.toLowerCase();
-    return blockedUsers.value.filter((user) => {
-      return (
-        user.userId.toLowerCase().includes(query) ||
-        user.nickName.toLowerCase().includes(query)
-      );
-    });
-  });
-
   // Initialize on mount
   onMounted(() => {
     initializeRelations();
@@ -107,20 +68,13 @@ export function useRelationsDisplay() {
 
   return {
     // State
-    friends: filteredFriends,
-    blockedUsers: filteredBlockedUsers,
+    friends,
+    blockedUsers,
     loading,
     error,
 
-    // Search
-    searchQuery,
-
     // Methods
     refresh: initializeRelations,
-
-    // Raw data (without search filter)
-    rawFriends: friends,
-    rawBlockedUsers: blockedUsers,
 
     // Relations map for lookup
     relationsMap,

@@ -1,4 +1,4 @@
-import { computed, ref, type Ref } from 'vue';
+import { computed, type Ref } from 'vue';
 import type { ConversationDisplay } from '../types/chat';
 
 /**
@@ -18,17 +18,14 @@ export interface GroupDisplayItem {
 }
 
 /**
- * Composable for displaying and filtering groups
+ * Composable for displaying groups
  *
  * Filters group conversations from the full conversation list
- * and provides search functionality
  *
  * @param conversations - Reactive conversations list from useChatDisplay
- * @returns Groups list, search functionality, and loading state
+ * @returns Groups list and lookup methods
  */
 export function useGroupsDisplay(conversations: Ref<ConversationDisplay[]>) {
-  const searchQuery = ref('');
-
   /**
    * All groups (conversations with groupId)
    */
@@ -51,19 +48,6 @@ export function useGroupsDisplay(conversations: Ref<ConversationDisplay[]>) {
   });
 
   /**
-   * Filtered groups based on search query
-   */
-  const filteredGroups = computed<GroupDisplayItem[]>(() => {
-    if (!searchQuery.value.trim()) {
-      return groups.value;
-    }
-    const query = searchQuery.value.toLowerCase().trim();
-    return groups.value.filter((group) =>
-      group.name.toLowerCase().includes(query)
-    );
-  });
-
-  /**
    * Find a group by groupId
    */
   function getGroupById(groupId: string): GroupDisplayItem | undefined {
@@ -80,8 +64,6 @@ export function useGroupsDisplay(conversations: Ref<ConversationDisplay[]>) {
   return {
     // State
     groups,
-    filteredGroups,
-    searchQuery,
 
     // Methods
     getGroupById,

@@ -59,28 +59,17 @@
     <div class="flex-1 bg-gray-50 px-8 py-6 overflow-auto">
       <!-- Friends Tab -->
       <div v-if="activeTab === 'friends'">
-        <!-- Search Box -->
-        <div class="relative mb-6">
-          <HeroIcon name="magnifying-glass" className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search friends by name or ID..."
-            class="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-          />
-        </div>
-
         <!-- Friends List -->
         <div class="space-y-2">
           <div v-if="loading" class="text-center py-16 text-gray-500">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
           </div>
 
-          <div v-else-if="filteredFriends.length === 0" class="text-center py-16 text-gray-500">
-            {{ searchQuery ? 'No friends found' : 'No friends yet' }}
+          <div v-else-if="friends.length === 0" class="text-center py-16 text-gray-500">
+            No friends yet
           </div>
 
-          <div v-else v-for="friend in filteredFriends" :key="friend.userId">
+          <div v-else v-for="friend in friends" :key="friend.userId">
             <!-- Friend Card -->
             <div class="bg-white rounded-lg p-4 border border-gray-100 hover:shadow-md transition-shadow">
               <div class="flex items-center justify-between">
@@ -118,31 +107,27 @@
                   >
                     <button
                       @click.stop="handleChat(friend)"
-                      class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                      class="w-full px-4 py-2 text-center text-gray-700 hover:bg-gray-50 transition-colors"
                     >
-                      <HeroIcon name="message-circle" className="w-4 h-4" />
-                      <span>Chat</span>
+                      Chat
                     </button>
                     <button
                       @click.stop="startEditingName(friend)"
-                      class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                      class="w-full px-4 py-2 text-center text-gray-700 hover:bg-gray-50 transition-colors"
                     >
-                      <HeroIcon name="edit-2" className="w-4 h-4" />
-                      <span>Edit Remark Name</span>
+                      Edit Remark Name
                     </button>
                     <button
                       @click.stop="handleRemoveFriend(friend)"
-                      class="w-full px-4 py-2 text-left text-red-600 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                      class="w-full px-4 py-2 text-center text-red-600 hover:bg-gray-50 transition-colors"
                     >
-                      <HeroIcon name="trash" className="w-4 h-4" />
-                      <span>Remove Friend</span>
+                      Remove Friend
                     </button>
                     <button
                       @click.stop="handleBlock(friend)"
-                      class="w-full px-4 py-2 text-left text-red-600 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                      class="w-full px-4 py-2 text-center text-red-600 hover:bg-gray-50 transition-colors"
                     >
-                      <HeroIcon name="no-symbol" className="w-4 h-4" />
-                      <span>Block</span>
+                      Block
                     </button>
                   </div>
                 </div>
@@ -198,22 +183,12 @@
       <!-- Groups Tab -->
       <div v-if="activeTab === 'groups'">
         <!-- Header with Create Group button -->
-        <div class="flex items-center justify-between mb-6">
-          <div class="relative flex-1 mr-4">
-            <HeroIcon name="magnifying-glass" className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              v-model="groupSearchQuery"
-              type="text"
-              placeholder="Search groups by name..."
-              class="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-            />
-          </div>
+        <div class="flex justify-end mb-6">
           <button
             @click="openCreateGroupDialog"
-            class="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 whitespace-nowrap"
+            class="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-center whitespace-nowrap"
           >
-            <HeroIcon name="plus" className="w-5 h-5" />
-            <span>Create Group</span>
+            Create Group
           </button>
         </div>
 
@@ -223,11 +198,11 @@
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
           </div>
 
-          <div v-else-if="filteredGroups.length === 0" class="text-center py-16 text-gray-500">
-            {{ groupSearchQuery ? 'No groups found' : 'No groups yet. Create one to get started!' }}
+          <div v-else-if="groups.length === 0" class="text-center py-16 text-gray-500">
+            No groups yet. Create one to get started!
           </div>
 
-          <div v-else v-for="group in filteredGroups" :key="group.groupId">
+          <div v-else v-for="group in groups" :key="group.groupId">
             <!-- Group Card -->
             <div class="bg-white rounded-lg p-4 border border-gray-100 hover:shadow-md transition-shadow">
               <div class="flex items-center justify-between">
@@ -267,38 +242,33 @@
                   >
                     <button
                       @click.stop="handleGroupChat(group)"
-                      class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                      class="w-full px-4 py-2 text-center text-gray-700 hover:bg-gray-50 transition-colors"
                     >
-                      <HeroIcon name="message-circle" className="w-4 h-4" />
-                      <span>Chat</span>
+                      Chat
                     </button>
                     <button
                       @click.stop="openInviteMembersDialog(group)"
-                      class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                      class="w-full px-4 py-2 text-center text-gray-700 hover:bg-gray-50 transition-colors"
                     >
-                      <HeroIcon name="user-plus" className="w-4 h-4" />
-                      <span>Invite Members</span>
+                      Invite Members
                     </button>
                     <button
                       @click.stop="openViewMembersDialog(group)"
-                      class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                      class="w-full px-4 py-2 text-center text-gray-700 hover:bg-gray-50 transition-colors"
                     >
-                      <HeroIcon name="users" className="w-4 h-4" />
-                      <span>View Members</span>
+                      View Members
                     </button>
                     <button
                       @click.stop="openEditGroupDialog(group)"
-                      class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                      class="w-full px-4 py-2 text-center text-gray-700 hover:bg-gray-50 transition-colors"
                     >
-                      <HeroIcon name="edit-2" className="w-4 h-4" />
-                      <span>Edit Group Info</span>
+                      Edit Group Info
                     </button>
                     <button
                       @click.stop="openLeaveGroupDialog(group)"
-                      class="w-full px-4 py-2 text-left text-red-600 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                      class="w-full px-4 py-2 text-center text-red-600 hover:bg-gray-50 transition-colors"
                     >
-                      <HeroIcon name="log-out" className="w-4 h-4" />
-                      <span>Leave Group</span>
+                      Leave Group
                     </button>
                   </div>
                 </div>
@@ -310,28 +280,17 @@
 
       <!-- Blocked Tab -->
       <div v-if="activeTab === 'blocked'">
-        <!-- Search Box -->
-        <div class="relative mb-6">
-          <HeroIcon name="magnifying-glass" className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search blocked users by name or ID..."
-            class="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-          />
-        </div>
-
         <!-- Blocked Users List -->
         <div class="space-y-2">
           <div v-if="loading" class="text-center py-16 text-gray-500">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
           </div>
 
-          <div v-else-if="filteredBlockedUsers.length === 0" class="text-center py-16 text-gray-500">
+          <div v-else-if="blockedUsers.length === 0" class="text-center py-16 text-gray-500">
             No blocked users
           </div>
 
-          <div v-else v-for="blockedUser in filteredBlockedUsers" :key="blockedUser.userId">
+          <div v-else v-for="blockedUser in blockedUsers" :key="blockedUser.userId">
             <!-- Blocked User Card -->
             <div class="bg-white rounded-lg p-4 border border-gray-100 hover:shadow-md transition-shadow">
               <div class="flex items-center justify-between">
@@ -369,17 +328,15 @@
                   >
                     <button
                       @click.stop="handleUnblock(blockedUser)"
-                      class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                      class="w-full px-4 py-2 text-center text-gray-700 hover:bg-gray-50 transition-colors"
                     >
-                      <HeroIcon name="eye" className="w-4 h-4" />
-                      <span>Unblock</span>
+                      Unblock
                     </button>
                     <button
                       @click.stop="handleHide(blockedUser)"
-                      class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                      class="w-full px-4 py-2 text-center text-gray-700 hover:bg-gray-50 transition-colors"
                     >
-                      <HeroIcon name="eye-off" className="w-4 h-4" />
-                      <span>Hide</span>
+                      Hide
                     </button>
                   </div>
                 </div>
@@ -410,10 +367,9 @@
             <button
               @click="searchUser"
               :disabled="searching"
-              class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <HeroIcon name="magnifying-glass" className="w-4 h-4" />
-              <span>Search</span>
+              Search
             </button>
           </div>
 
@@ -440,10 +396,9 @@
               <button
                 @click="addNewFriend"
                 :disabled="adding"
-                class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-center disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <HeroIcon name="user-plus" className="w-4 h-4" />
-                <span>Add Friend</span>
+                Add Friend
               </button>
             </div>
           </div>
@@ -596,12 +551,10 @@ const confirmAction = ref<{
 
 // Use composables
 const {
-  friends: filteredFriends,
-  blockedUsers: filteredBlockedUsers,
   friends,
+  blockedUsers,
   relationsMap,
   loading,
-  searchQuery,
 } = useRelationsDisplay();
 
 const {
@@ -623,8 +576,7 @@ const { conversations } = useChatDisplay(relationsMap, currentUserId);
 
 // Groups display
 const {
-  filteredGroups,
-  searchQuery: groupSearchQuery,
+  groups,
 } = useGroupsDisplay(conversations);
 
 // Group dialog states
