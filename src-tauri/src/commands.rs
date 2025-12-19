@@ -760,3 +760,17 @@ pub async fn upload_attachment(
         )),
     }
 }
+
+#[tauri::command]
+pub async fn logout(
+    data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
+    ws_manager: State<'_, crate::DefaultWsManager>,
+) -> Result<(), errors::CommandError> {
+    // Stop WebSocket connection (ignore errors if already stopped)
+    let _ = ws_manager.stop().await;
+
+    // Clear token from storage
+    data_sync.clear_token().await?;
+
+    Ok(())
+}

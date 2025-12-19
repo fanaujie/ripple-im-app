@@ -156,6 +156,12 @@ pub trait StoreEngine: Sync + Clone + 'static {
     async fn save_device_id(&self, device_id: &Uuid) -> anyhow::Result<()>;
     async fn get_token(&self) -> anyhow::Result<Option<Token>>;
     async fn save_token(&self, access_token: &str, refresh_token: &str) -> anyhow::Result<()>;
+    async fn clear_token(&self) -> anyhow::Result<()>;
+
+    async fn get_stored_user_id(&self) -> anyhow::Result<Option<String>>;
+    async fn save_user_id(&self, user_id: &str) -> anyhow::Result<()>;
+    async fn clear_all_data(&self) -> anyhow::Result<()>;
+
     async fn get_user_profile(&self) -> anyhow::Result<Option<UserProfileData>>;
     async fn save_user_profile(&self, profile: UserProfileData) -> anyhow::Result<()>;
 
@@ -265,6 +271,7 @@ struct InnerStore {
     access_token: Option<String>,
     refresh_token: Option<String>,
     uuid: Option<Uuid>,
+    user_id: Option<String>,
     user_profile: Option<UserProfileData>,
     relations: HashMap<String, RelationUser>,
     relation_version: Option<String>,
@@ -286,6 +293,7 @@ impl MemoryStore {
                 access_token: None,
                 refresh_token: None,
                 uuid: None,
+                user_id: None,
                 user_profile: None,
                 relations: HashMap::new(),
                 relation_version: None,
@@ -347,6 +355,41 @@ impl RippleStorage for MemoryStore {
         let mut inner = self.inner.lock().await;
         inner.access_token = Some(access_token.to_string());
         inner.refresh_token = Some(refresh_token.to_string());
+        Ok(())
+    }
+
+    async fn clear_token(&self) -> anyhow::Result<()> {
+        let mut inner = self.inner.lock().await;
+        inner.access_token = None;
+        inner.refresh_token = None;
+        Ok(())
+    }
+
+    async fn get_stored_user_id(&self) -> anyhow::Result<Option<String>> {
+        let inner = self.inner.lock().await;
+        Ok(inner.user_id.clone())
+    }
+
+    async fn save_user_id(&self, user_id: &str) -> anyhow::Result<()> {
+        let mut inner = self.inner.lock().await;
+        inner.user_id = Some(user_id.to_string());
+        Ok(())
+    }
+
+    async fn clear_all_data(&self) -> anyhow::Result<()> {
+        let mut inner = self.inner.lock().await;
+        // Clear all data except device_id (uuid) and token (which is the new user's token)
+        // Token and user_id are managed separately by check_and_clear_on_user_change
+        inner.user_profile = None;
+        inner.relations.clear();
+        inner.relation_version = None;
+        inner.conversations.clear();
+        inner.conversation_version = None;
+        inner.messages.clear();
+        inner.user_groups.clear();
+        inner.user_groups_version = None;
+        inner.group_members.clear();
+        inner.group_member_versions.clear();
         Ok(())
     }
 

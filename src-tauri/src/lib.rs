@@ -30,6 +30,11 @@ use tauri::Manager;
 // #[cfg(feature = "memory-store")]
 type DefaultStoreEngine = MemoryStore;
 
+// Type aliases for complex generic types
+type DefaultSyncHandler = RippleWsSyncHandler<DefaultStoreEngine, DefaultEventEmitter>;
+type DefaultWsMessageHandler = SyncAwareWsMessageHandler<DefaultSyncHandler>;
+pub type DefaultWsManager = RippleWsManager<DefaultWsMessageHandler>;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut config_file_path = "resources/prod_app_config.json";
@@ -53,7 +58,6 @@ pub fn run() {
             let app_config = parse_app_config(resource_path);
             let reqwest_client = reqwest::ClientBuilder::new()
                 .redirect(reqwest::redirect::Policy::none())
-                .proxy(reqwest::Proxy::http("http://192.168.50.31:9999")?)
                 .build()?;
             let oauth_client = OauthClient::new(&app_config, reqwest_client.clone())?;
             let store = create_store();
@@ -112,6 +116,7 @@ pub fn run() {
             commands::update_group_name,
             commands::leave_group,
             commands::upload_attachment,
+            commands::logout,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

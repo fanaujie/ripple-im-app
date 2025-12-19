@@ -4,6 +4,7 @@ use crate::ripple_api::api_response::{
     RelationChange, RelationOperation, RelationUser, RelationUsers, RelationsSyncData,
     UserGroupChange, UserGroupData, UserGroupOperation, UserGroupSyncData, UserProfileData,
 };
+use crate::ripple_api::auth_token_parser::AuthTokenParser;
 use crate::ripple_api::RippleApi;
 use crate::ripple_syncer::event_emitter::UIConversations;
 use crate::ripple_syncer::incremental_operations::{process_incremental_operations, Operation};
@@ -139,6 +140,39 @@ impl<S: RippleStorage> DataSyncManager<S> {
 
     pub async fn exists_token(&self) -> anyhow::Result<bool> {
         self.store_engine.exists_token().await
+    }
+
+    pub async fn clear_token(&self) -> anyhow::Result<()> {
+        self.store_engine.clear_token().await
+    }
+
+    pub async fn check_and_clear_on_user_change(&self) -> anyhow::Result<bool> {
+        let token = self.get_token().await?;
+        let claims = AuthTokenParser::decode_jwt_payload(&token.access_token)?;
+        let new_user_id = claims.get_sub();
+
+        let stored_user_id = self.store_engine.get_stored_user_id().await?;
+
+        match stored_user_id {
+            Some(old_user_id) if old_user_id != new_user_id => {
+                // User changed, clear all data
+                println!(
+                    "User changed from {} to {}, clearing all stored data",
+                    old_user_id, new_user_id
+                );
+                self.store_engine.clear_all_data().await?;
+                self.store_engine.save_user_id(&new_user_id).await?;
+                Ok(true)
+            }
+            None => {
+                self.store_engine.save_user_id(&new_user_id).await?;
+                Ok(false)
+            }
+            Some(_) => {
+                // Same user, no action needed
+                Ok(false)
+            }
+        }
     }
 
     pub async fn exists_profile(&self) -> anyhow::Result<bool> {

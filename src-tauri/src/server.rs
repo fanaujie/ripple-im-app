@@ -158,6 +158,18 @@ async fn handler(
             // Initialize data first (profile, relations, conversations)
             let app_handle = api_state.app_handle.clone();
             let data_sync = app_handle.state::<DataSyncManager<DefaultStoreEngine>>();
+
+            match data_sync.check_and_clear_on_user_change().await {
+                Ok(cleared) => {
+                    if cleared {
+                        println!("User changed, all stored data has been cleared");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to check user change: {}", e);
+                }
+            }
+
             if let Err(e) = data_sync.init().await {
                 eprintln!("Failed to initialize DataSyncManager: {}", e);
                 return Html(load_html_file(&api_state.app_handle, AuthSuccessRestart).await);

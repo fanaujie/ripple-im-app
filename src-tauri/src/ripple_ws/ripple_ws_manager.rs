@@ -24,7 +24,7 @@ where
 {
     message_handler: R,
     sender_tx: Arc<Mutex<Option<UnboundedSender<Message>>>>,
-    is_running: AtomicBool,
+    is_running: Arc<AtomicBool>,
     data_sync: DataSyncManager<DefaultStoreEngine>,
 }
 
@@ -39,14 +39,15 @@ where
         RippleWsManager {
             message_handler: msg_handler,
             sender_tx: Arc::new(Mutex::new(None)),
-            is_running: AtomicBool::new(false),
+            is_running: Arc::new(AtomicBool::new(false)),
             data_sync,
         }
     }
     pub async fn start(&self, ws_url: &str) -> anyhow::Result<()> {
-        if self.is_running.load(Ordering::Relaxed) {
+        if self.is_running.load(Ordering::SeqCst) {
             anyhow::bail!("WebSocket manager is running");
         }
+        self.is_running.store(true, Ordering::SeqCst);
         let token = self.data_sync.get_token().await?;
         let claims = AuthTokenParser::decode_jwt_payload(&token.access_token)?;
         let user_id = claims.get_sub();
@@ -65,10 +66,16 @@ where
             .insert(HEADER_RIPPLE_DEVICE_ID, device_id.to_string().parse()?);
         let sender_tx_clone = self.sender_tx.clone();
         let msg_handler_clone = self.message_handler.clone();
+        let is_running_clone = self.is_running.clone();
         self.message_handler.start_syncer().await?;
         tauri::async_runtime::spawn(async move {
             let mut backoff = ExponentialBackoff::default();
             loop {
+                // Check if we should stop before attempting to connect
+                if !is_running_clone.load(Ordering::SeqCst) {
+                    println!("WebSocket manager stopped, exiting reconnection loop");
+                    break;
+                }
                 let result = connect_async(request.clone()).await;
                 match result {
                     Ok((ws_stream, _)) => {
@@ -126,9 +133,19 @@ where
                             }
                         }
                         msg_handler_clone.notify_disconnect().await;
+                        // Check if we should stop after disconnect
+                        if !is_running_clone.load(Ordering::SeqCst) {
+                            println!("WebSocket manager stopped after disconnect");
+                            break;
+                        }
                     }
                     Err(e) => {
                         eprintln!("WebSocket connection error: {}", e);
+                        // Check if we should stop before retrying
+                        if !is_running_clone.load(Ordering::SeqCst) {
+                            println!("WebSocket manager stopped, not retrying");
+                            break;
+                        }
                         if let Some(duration) = backoff.next_backoff() {
                             tokio::time::sleep(duration).await;
                         } else {
@@ -155,6 +172,9 @@ where
         Ok(())
     }
     pub async fn stop(&self) -> anyhow::Result<()> {
+        // Set is_running to false to prevent reconnection
+        self.is_running.store(false, Ordering::SeqCst);
+
         let syncer_result = self.message_handler.stop_syncer().await;
         let stop_result = self.send_message(Message::Close(None)).await;
         match (syncer_result, stop_result) {
