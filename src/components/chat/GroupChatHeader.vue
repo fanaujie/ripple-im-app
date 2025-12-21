@@ -7,8 +7,7 @@
         class="w-10 h-10 rounded-full object-cover"
       />
       <div>
-        <h2 class="font-medium">{{ groupName }}</h2>
-        <p class="text-sm text-gray-500">{{ memberCountText }}</p>
+        <h2 class="font-medium">{{ groupDisplayName }}</h2>
       </div>
     </div>
 
@@ -93,10 +92,8 @@ const groupAvatarUrl = computed(() => {
   return `asset://localhost/${props.groupAvatar}`;
 });
 
-const memberCountText = computed(() => {
-  if (props.memberCount === 0) return 'No members';
-  if (props.memberCount === 1) return '1 member';
-  return `${props.memberCount} members`;
+const groupDisplayName = computed(() => {
+  return `${props.groupName}(${props.memberCount})`;
 });
 
 function toggleMenu() {

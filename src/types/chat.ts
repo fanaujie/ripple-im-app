@@ -172,6 +172,8 @@ export interface UIMessageItem {
   conversationId: string;
   /** ID of the user who sent the message */
   senderId: string;
+  /** ID of the group (for group chat messages) */
+  groupId?: string;
   /** Message content */
   content: string;
   /** Message timestamp (Unix timestamp in milliseconds) */

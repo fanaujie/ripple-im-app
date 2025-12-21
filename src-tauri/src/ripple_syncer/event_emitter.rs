@@ -81,6 +81,8 @@ pub struct UIMessageItem {
     pub conversation_id: String,
     #[serde(rename = "senderId")]
     pub sender_id: String,
+    #[serde(rename = "groupId", skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<String>,
     pub content: String,
     pub timestamp: i64,
     #[serde(rename = "messageType")]
@@ -115,10 +117,17 @@ impl From<PushMessageRequest> for UIMessageItem {
                         } else {
                             Some(msg_context.file_name.clone())
                         };
+                        // Convert group_id: 0 means no group (1v1 chat)
+                        let group_id = if message_data.group_id != 0 {
+                            Some(message_data.group_id.to_string())
+                        } else {
+                            None
+                        };
                         UIMessageItem {
                             message_id: message_data.message_id.to_string(),
                             conversation_id: message_data.conversation_id,
                             sender_id: message_data.sender_id.to_string(),
+                            group_id,
                             content: msg_context.text.clone(),
                             timestamp: message_data.send_timestamp,
                             message_type: 1, // Text
@@ -129,10 +138,17 @@ impl From<PushMessageRequest> for UIMessageItem {
                         }
                     }
                     Some(send_message_req::Message::GroupCommandMessageContent(cmd_content)) => {
+                        // For group commands, group_id is always present
+                        let group_id = if message_data.group_id != 0 {
+                            Some(message_data.group_id.to_string())
+                        } else {
+                            None
+                        };
                         UIMessageItem {
                             message_id: message_data.message_id.to_string(),
                             conversation_id: message_data.conversation_id,
                             sender_id: message_data.sender_id.to_string(),
+                            group_id,
                             content: cmd_content.text.clone(),
                             timestamp: message_data.send_timestamp,
                             message_type: 2, // Command

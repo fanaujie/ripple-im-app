@@ -1,12 +1,13 @@
 import { computed, ref, onMounted, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { ConversationDisplay, ConversationReceivedMessageEvent } from '../../types/chat';
-import { sortConversationsByTime, MessageAction } from '../../types/chat';
+import { sortConversationsByTime, MessageAction, isGroupChat } from '../../types/chat';
 import { useConversationsState } from './useConversationsState';
 import { useMessagesState } from './useMessagesState';
 import { useConversationEvents } from './useConversationEvents';
 import { useMessageEvents } from './useMessageEvents';
 import { useChatActions } from './useChatActions';
+import { useGroupMembersCache } from './useGroupMembersCache';
 import type { RelationUser } from '../../types/relations';
 import { personalizeMessageText, type PersonalizationContext } from '../../utils/messagePersonalization';
 
@@ -43,6 +44,9 @@ export function useChatDisplay(
 
   // Actions
   const actions = useChatActions();
+
+  // Group members cache for prefetching member counts
+  const { fetchGroupMembers } = useGroupMembersCache();
 
   /**
    * Create personalization context for a conversation
@@ -173,6 +177,20 @@ export function useChatDisplay(
       const data = await invoke<UIConversations>('get_conversations');
       conversationsState.initialize(data.conversations);
       console.log('[useChatDisplay] Initialized conversations:', data.conversations.length);
+
+      // Prefetch group members for all group conversations (for member count display)
+      const groupConversations = data.conversations.filter(isGroupChat);
+      if (groupConversations.length > 0) {
+        console.log('[useChatDisplay] Prefetching members for', groupConversations.length, 'groups');
+        // Fetch in parallel, don't block initialization
+        Promise.all(
+          groupConversations.map(conv =>
+            fetchGroupMembers(conv.groupId!).catch(err => {
+              console.warn('[useChatDisplay] Failed to prefetch members for group:', conv.groupId, err);
+            })
+          )
+        );
+      }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to load conversations';
       console.error('[useChatDisplay] Failed to initialize conversations:', err);

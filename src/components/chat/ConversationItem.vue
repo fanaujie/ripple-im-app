@@ -46,8 +46,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { ConversationDisplay } from '../../types/chat';
-import { getConversationDisplayName, getConversationAvatar } from '../../types/chat';
+import { getConversationDisplayName, getConversationAvatar, isGroupChat } from '../../types/chat';
 import { formatConversationTime } from '../../utils/dateFormat';
+import { useGroupMembersCache } from '../../composables/chat/useGroupMembersCache';
 import defaultAvatarUrl from '../../assets/default-avatar.svg';
 
 const props = defineProps<{
@@ -58,7 +59,21 @@ const emit = defineEmits<{
   click: [conversation: ConversationDisplay];
 }>();
 
-const displayName = computed(() => getConversationDisplayName(props.conversation));
+const { getGroupMemberCount } = useGroupMembersCache();
+
+const displayName = computed(() => {
+  const baseName = getConversationDisplayName(props.conversation);
+
+  // For group chats, append member count if available
+  if (isGroupChat(props.conversation) && props.conversation.groupId) {
+    const memberCount = getGroupMemberCount(props.conversation.groupId);
+    if (memberCount !== undefined) {
+      return `${baseName}(${memberCount})`;
+    }
+  }
+
+  return baseName;
+});
 
 const avatarUrl = computed(() => {
   const avatar = getConversationAvatar(props.conversation);

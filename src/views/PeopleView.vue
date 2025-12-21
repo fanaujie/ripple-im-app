@@ -219,8 +219,7 @@
                     <HeroIcon v-else name="user-group" className="w-6 h-6 text-blue-500" />
                   </div>
                   <div>
-                    <div class="font-medium text-gray-900">{{ group.name }}</div>
-                    <div class="text-sm text-gray-500">Group</div>
+                    <div class="font-medium text-gray-900">{{ getGroupDisplayName(group) }}</div>
                   </div>
                 </div>
 
@@ -494,7 +493,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, computed } from 'vue';
+import { ref, nextTick, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import type { RelationUser } from '../types/relations';
 import HeroIcon from '../components/shared/HeroIcon.vue';
@@ -503,6 +502,7 @@ import { useRelationActions } from '../composables/useRelationActions';
 import { useChatDisplay } from '../composables/chat/useChatDisplay';
 import { useGroupsDisplay, type GroupDisplayItem } from '../composables/useGroupsDisplay';
 import { useUserProfileDisplay } from '../composables/useUserProfileDisplay';
+import { useGroupMembersCache } from '../composables/chat/useGroupMembersCache';
 import CreateGroupDialog from '../components/chat/CreateGroupDialog.vue';
 import InviteMembersDialog from '../components/group/InviteMembersDialog.vue';
 import ViewMembersDialog from '../components/group/ViewMembersDialog.vue';
@@ -578,6 +578,33 @@ const { conversations } = useChatDisplay(relationsMap, currentUserId);
 const {
   groups,
 } = useGroupsDisplay(conversations);
+
+// Group members cache for member count display
+const { fetchGroupMembers, getGroupMemberCount, useGroupMemberChangeListener } = useGroupMembersCache();
+
+// Listen for group member changes (join/leave) and auto-refresh cache
+useGroupMemberChangeListener();
+
+// Prefetch group members when groups change
+watch(groups, (newGroups) => {
+  if (newGroups.length > 0) {
+    console.log('[PeopleView] Prefetching members for', newGroups.length, 'groups');
+    newGroups.forEach(group => {
+      fetchGroupMembers(group.groupId).catch(err => {
+        console.warn('[PeopleView] Failed to prefetch members for group:', group.groupId, err);
+      });
+    });
+  }
+}, { immediate: true });
+
+// Get group display name with member count
+function getGroupDisplayName(group: GroupDisplayItem): string {
+  const memberCount = getGroupMemberCount(group.groupId);
+  if (memberCount !== undefined) {
+    return `${group.name}(${memberCount})`;
+  }
+  return group.name;
+}
 
 // Group dialog states
 const isCreateGroupDialogOpen = ref(false);

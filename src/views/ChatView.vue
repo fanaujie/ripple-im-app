@@ -378,8 +378,11 @@ const { addFriend, blockUser } = useRelationActions();
 // File upload
 const { uploading, uploadProgress, progressPercent, uploadFile } = useFileUpload();
 
-// Group members cache for sender avatars
-const { fetchGroupMembers, getSenderInfo } = useGroupMembersCache();
+// Group members cache for sender avatars and member count
+const { fetchGroupMembers, getSenderInfo, getGroupMemberCount, useGroupMemberChangeListener } = useGroupMembersCache();
+
+// Listen for group member changes (join/leave) and auto-refresh cache
+useGroupMemberChangeListener();
 
 // File preview modal state
 const isImagePreviewOpen = ref(false);
@@ -598,11 +601,12 @@ const isGroupChat = computed(() => {
   return !!selectedConversation.value?.groupId;
 });
 
-// Get group member count
+// Get group member count from cache
 const groupMemberCount = computed(() => {
-  // TODO: This will be populated from group members list
-  // For now, return 0 as placeholder
-  return 0;
+  if (!selectedConversation.value?.groupId) {
+    return 0;
+  }
+  return getGroupMemberCount(selectedConversation.value.groupId) ?? 0;
 });
 
 // Select conversation
@@ -1043,13 +1047,44 @@ function handleUserIdNavigation(userId: string) {
   }
 }
 
-// Watch conversations array - handle pending userId when conversations load
+// Handle conversationId from route query parameter (for group chat navigation)
+function handleConversationIdNavigation(conversationId: string) {
+  if (!conversationId) return;
+
+  // If still loading, wait for conversations to load
+  if (loading.value) {
+    console.log('[ChatView] Still loading, will retry conversationId navigation when ready');
+    return;
+  }
+
+  // Find conversation with matching conversationId
+  const targetConversation = conversations.value.find(conv => conv.conversationId === conversationId);
+
+  if (targetConversation) {
+    console.log('[ChatView] Found conversation, selecting:', conversationId);
+    selectConversation(targetConversation);
+  } else {
+    console.log('[ChatView] Conversation not found:', conversationId);
+  }
+}
+
+// Watch conversations array - handle pending navigation when conversations load
 // Also sync selectedConversation when underlying data changes (e.g., name/avatar update)
 watch(conversations, () => {
+  // Handle pending userId navigation
   const userId = route.query.userId as string | undefined;
   if (userId && targetUserId.value === userId && !selectedConversation.value) {
     // Retry finding conversation now that conversations are loaded
     const targetConversation = conversations.value.find(conv => conv.peerId === userId);
+    if (targetConversation) {
+      selectConversation(targetConversation);
+    }
+  }
+
+  // Handle pending conversationId navigation (for group chats)
+  const conversationId = route.query.conversationId as string | undefined;
+  if (conversationId && !selectedConversation.value) {
+    const targetConversation = conversations.value.find(conv => conv.conversationId === conversationId);
     if (targetConversation) {
       selectConversation(targetConversation);
     }
@@ -1071,8 +1106,8 @@ watch(conversations, () => {
 watch(() => route.query.userId, (newUserId) => {
   if (newUserId) {
     handleUserIdNavigation(newUserId as string);
-  } else {
-    // Clear selection when leaving chat
+  } else if (!route.query.conversationId) {
+    // Clear selection when leaving chat (only if no conversationId either)
     selectedConversation.value = null;
     targetUserId.value = null;
     setActiveConversation(null);
@@ -1081,11 +1116,27 @@ watch(() => route.query.userId, (newUserId) => {
   bannerDismissedForUser.value = null;
 });
 
+// Watch route changes for conversationId (group chat navigation)
+watch(() => route.query.conversationId, (newConversationId) => {
+  if (newConversationId) {
+    handleConversationIdNavigation(newConversationId as string);
+  } else if (!route.query.userId) {
+    // Clear selection when leaving chat (only if no userId either)
+    selectedConversation.value = null;
+    targetUserId.value = null;
+    setActiveConversation(null);
+  }
+});
+
 // Handle initial load
 onMounted(() => {
   const userId = route.query.userId as string | undefined;
+  const conversationId = route.query.conversationId as string | undefined;
+
   if (userId) {
     handleUserIdNavigation(userId);
+  } else if (conversationId) {
+    handleConversationIdNavigation(conversationId);
   }
 });
 </script>
