@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+  <defs>
+    <linearGradient id="frontendGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#42b883;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#35495e;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="backendGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#dea584;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#b7410e;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="serverGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Vue 3 Frontend Box -->
+  <rect x="50" y="30" width="700" height="130" rx="10" fill="url(#frontendGrad)" stroke="#2c3e50" stroke-width="2"/>
+  <text x="400" y="60" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="18" font-weight="bold">Vue 3 Frontend</text>
+
+  <!-- Frontend Components -->
+  <rect x="80" y="80" width="180" height="60" rx="6" fill="white" fill-opacity="0.9" stroke="#2c3e50" stroke-width="1"/>
+  <text x="170" y="105" text-anchor="middle" fill="#2c3e50" font-family="Arial, sans-serif" font-size="14" font-weight="bold">Views</text>
+  <text x="170" y="125" text-anchor="middle" fill="#666" font-family="Arial, sans-serif" font-size="12">(Pages)</text>
+
+  <rect x="310" y="80" width="180" height="60" rx="6" fill="white" fill-opacity="0.9" stroke="#2c3e50" stroke-width="1"/>
+  <text x="400" y="105" text-anchor="middle" fill="#2c3e50" font-family="Arial, sans-serif" font-size="14" font-weight="bold">Components</text>
+  <text x="400" y="125" text-anchor="middle" fill="#666" font-family="Arial, sans-serif" font-size="12">(UI Parts)</text>
+
+  <rect x="540" y="80" width="180" height="60" rx="6" fill="white" fill-opacity="0.9" stroke="#2c3e50" stroke-width="1"/>
+  <text x="630" y="105" text-anchor="middle" fill="#2c3e50" font-family="Arial, sans-serif" font-size="14" font-weight="bold">Composables</text>
+  <text x="630" y="125" text-anchor="middle" fill="#666" font-family="Arial, sans-serif" font-size="12">(State Management)</text>
+
+  <!-- Tauri IPC Bridge Arrow -->
+  <line x1="400" y1="160" x2="400" y2="200" stroke="#ffc131" stroke-width="4"/>
+  <polygon points="400,210 390,195 410,195" fill="#ffc131"/>
+  <rect x="320" y="175" width="160" height="25" rx="4" fill="#ffc131"/>
+  <text x="400" y="193" text-anchor="middle" fill="#2c3e50" font-family="Arial, sans-serif" font-size="12" font-weight="bold">Tauri IPC Bridge</text>
+
+  <!-- Rust Backend Box -->
+  <rect x="50" y="220" width="700" height="130" rx="10" fill="url(#backendGrad)" stroke="#8b4513" stroke-width="2"/>
+  <text x="400" y="250" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="18" font-weight="bold">Rust Backend</text>
+
+  <!-- Backend Components -->
+  <rect x="80" y="270" width="180" height="60" rx="6" fill="white" fill-opacity="0.9" stroke="#8b4513" stroke-width="1"/>
+  <text x="170" y="295" text-anchor="middle" fill="#2c3e50" font-family="Arial, sans-serif" font-size="14" font-weight="bold">Ripple API</text>
+  <text x="170" y="315" text-anchor="middle" fill="#666" font-family="Arial, sans-serif" font-size="12">(REST)</text>
+
+  <rect x="310" y="270" width="180" height="60" rx="6" fill="white" fill-opacity="0.9" stroke="#8b4513" stroke-width="1"/>
+  <text x="400" y="295" text-anchor="middle" fill="#2c3e50" font-family="Arial, sans-serif" font-size="14" font-weight="bold">Data Sync</text>
+  <text x="400" y="315" text-anchor="middle" fill="#666" font-family="Arial, sans-serif" font-size="12">(WebSocket)</text>
+
+  <rect x="540" y="270" width="180" height="60" rx="6" fill="white" fill-opacity="0.9" stroke="#8b4513" stroke-width="1"/>
+  <text x="630" y="295" text-anchor="middle" fill="#2c3e50" font-family="Arial, sans-serif" font-size="14" font-weight="bold">Store Engine</text>
+  <text x="630" y="315" text-anchor="middle" fill="#666" font-family="Arial, sans-serif" font-size="12">(SQLite)</text>
+
+  <!-- Connection Arrow to Server -->
+  <line x1="400" y1="350" x2="400" y2="400" stroke="#764ba2" stroke-width="3" stroke-dasharray="8,4"/>
+  <polygon points="400,410 390,395 410,395" fill="#764ba2"/>
+
+  <!-- Ripple Server Box -->
+  <rect x="280" y="420" width="240" height="60" rx="10" fill="url(#serverGrad)" stroke="#5a4fcf" stroke-width="2"/>
+  <text x="400" y="448" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="16" font-weight="bold">Ripple Server</text>
+  <text x="400" y="468" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="Arial, sans-serif" font-size="12">(Backend API)</text>
+</svg>
