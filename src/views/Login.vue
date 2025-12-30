@@ -80,6 +80,17 @@ onMounted(async () => {
           title: 'Session Error',
           kind: 'error'
         });
+        // Start OAuth callback server so user can re-authenticate
+        try {
+          await invoke('start_server');
+          serverStarted.value = true;
+        } catch (serverErr: any) {
+          console.error('Failed to start server after session resume failure:', serverErr);
+          await message(`Failed to start server: ${serverErr?.message ?? serverErr}`, {
+            title: 'Server Error',
+            kind: 'error'
+          });
+        }
       }
     } else {
       console.log('No token found, staying on login page');
