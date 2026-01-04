@@ -54,21 +54,38 @@ where
         );
         match self.data_sync.sync_user_profile().await {
             Ok(()) => {
-                if let Some(profile_data) = self.data_sync.get_profile().await.unwrap() {
-                    println!(
-                        "[RippleWsSyncHandler] User avatar URL: {}",
-                        profile_data.avatar.as_ref().unwrap()
-                    );
-                    if let Err(e) = self.emitter.emit_user_profile_updated(profile_data.into()) {
+                match self.data_sync.get_profile().await {
+                    Ok(Some(profile_data)) => {
+                        println!(
+                            "[RippleWsSyncHandler] User avatar URL: {}",
+                            profile_data
+                                .avatar
+                                .as_ref()
+                                .unwrap_or(&"None".to_string())
+                        );
+                        if let Err(e) = self
+                            .emitter
+                            .emit_user_profile_updated(profile_data.into())
+                        {
+                            eprintln!(
+                                "[RippleWsSyncHandler] Failed to emit user profile updated event: {}",
+                                e
+                            );
+                        } else {
+                            println!("[RippleWsSyncHandler] Successfully synced and emitted user profile update");
+                        };
+                    }
+                    Ok(None) => {
                         eprintln!(
-                            "[RippleWsSyncHandler] Failed to emit user profile updated event: {}",
+                            "[RippleWsSyncHandler] Failed to retrieve user profile after sync"
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "[RippleWsSyncHandler] Failed to retrieve user profile from DB: {}",
                             e
                         );
-                    } else {
-                        println!("[RippleWsSyncHandler] Successfully synced and emitted user profile update");
-                    };
-                } else {
-                    eprintln!("[RippleWsSyncHandler] Failed to retrieve user profile after sync");
+                    }
                 }
             }
             Err(e) => {
