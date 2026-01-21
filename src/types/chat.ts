@@ -243,7 +243,7 @@ export interface ConversationReceivedMessageEvent {
   unreadCount: number;
   /** Message content preview (may contain {{userId}} template for personalization) */
   message: string;
-  /** Message timestamp (UTC seconds as string) */
+  /** Message timestamp (Unix timestamp in milliseconds as string) */
   timestamp: string;
 }
 

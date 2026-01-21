@@ -99,7 +99,7 @@ export function useChatDisplay(
       // Active conversation: update preview but set unreadCount to 0
       // (we'll call markConversationRead when the message-updated event arrives with messageId)
       if (conversation) {
-        const timestampMs = parseInt(timestamp, 10) * 1000;
+        const timestampMs = parseInt(timestamp, 10);
         conversation.lastMessage = personalizedMessage;
         conversation.lastMessageTimestamp = timestampMs;
         // Set unreadCount to 0 since user is viewing this conversation

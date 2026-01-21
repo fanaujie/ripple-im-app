@@ -67,8 +67,8 @@ export function useConversationsState(relations: Ref<Map<string, RelationUser>>)
     const conversation = conversations.value.find(c => c.conversationId === conversationId);
 
     if (conversation) {
-      // Convert UTC seconds (string) to milliseconds (number)
-      const timestampMs = parseInt(timestamp, 10) * 1000;
+      // Parse milliseconds timestamp (string) to number
+      const timestampMs = parseInt(timestamp, 10);
 
       // Update preview and timestamp
       conversation.lastMessage = message;
