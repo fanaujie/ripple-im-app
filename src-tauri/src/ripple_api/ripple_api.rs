@@ -650,22 +650,23 @@ where
         Ok(res.json::<MessageResponse>().await?)
     }
 
+    /// Read messages before a specific message ID (for loading older messages / history)
     pub async fn read_messages(
         &self,
         conversation_id: String,
-        message_id: String,
+        before_message_id: String,
         read_size: u32,
     ) -> anyhow::Result<ReadMessagesResponse> {
         #[derive(Serialize, Clone)]
         struct ReadMessagesParams {
-            #[serde(rename = "messageId")]
-            message_id: String,
+            #[serde(rename = "beforeMessageId")]
+            before_message_id: String,
             #[serde(rename = "readSize")]
             read_size: u32,
         }
 
         let params = ReadMessagesParams {
-            message_id,
+            before_message_id,
             read_size,
         };
 
@@ -687,6 +688,52 @@ where
                             .send()
                             .await
                             .map_err(|e| anyhow!("Failed to read messages: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<ReadMessagesResponse>().await?)
+    }
+
+    /// Read messages after a specific message ID (for filling gaps / syncing new messages)
+    pub async fn read_messages_after(
+        &self,
+        conversation_id: String,
+        after_message_id: String,
+        read_size: u32,
+    ) -> anyhow::Result<ReadMessagesResponse> {
+        #[derive(Serialize, Clone)]
+        struct ReadMessagesAfterParams {
+            #[serde(rename = "afterMessageId")]
+            after_message_id: String,
+            #[serde(rename = "readSize")]
+            read_size: u32,
+        }
+
+        let params = ReadMessagesAfterParams {
+            after_message_id,
+            read_size,
+        };
+
+        let url = format!(
+            "{}/{}/messages",
+            &self.api_paths.conversations, conversation_id
+        );
+
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let url = url.clone();
+                    let params = params.clone();
+                    async move {
+                        self.reqwest_client
+                            .get(&url)
+                            .header("Authorization", format!("Bearer {}", access_token))
+                            .query(&params)
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to read messages after: {}", e))
                     }
                 },
                 1,

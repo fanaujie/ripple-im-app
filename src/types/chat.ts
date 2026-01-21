@@ -111,7 +111,7 @@ export interface Message {
   receiverId?: string;
   /** ID of the group (for group chat) */
   groupId?: string;
-  /** Message timestamp (Unix timestamp in milliseconds) - converted from UTC seconds */
+  /** Message timestamp (Unix timestamp in milliseconds) */
   sendTimestamp: number;
   /** Message type (1=single, 2=group command) */
   messageType: number;
@@ -128,8 +128,8 @@ export interface Message {
 }
 
 /**
- * Message from backend (before timestamp conversion)
- * Backend sends UTC seconds as string to avoid precision loss
+ * Message from backend (raw string format)
+ * Backend sends milliseconds as string to avoid precision loss
  */
 export interface MessageFromBackend {
   messageId: string;
@@ -137,7 +137,7 @@ export interface MessageFromBackend {
   senderId: string;
   receiverId?: string;
   groupId?: string;
-  /** UTC timestamp in seconds (as string to preserve precision) */
+  /** Timestamp in milliseconds (as string to preserve precision) */
   sendTimestamp: string;
   messageType: number;
   text?: string;
@@ -148,16 +148,15 @@ export interface MessageFromBackend {
 }
 
 /**
- * Convert backend message (UTC seconds string) to frontend message (milliseconds number)
+ * Convert backend message (string format) to frontend message (number format)
  */
 export function convertBackendMessage(backendMsg: MessageFromBackend): Message {
-  // Parse UTC seconds string to number, then convert to milliseconds
-  const timestampSeconds = parseInt(backendMsg.sendTimestamp, 10);
-  const timestampMs = isNaN(timestampSeconds) ? 0 : timestampSeconds * 1000;
+  // Parse milliseconds string to number (no conversion needed, already in ms)
+  const timestamp = parseInt(backendMsg.sendTimestamp, 10);
 
   return {
     ...backendMsg,
-    sendTimestamp: timestampMs,
+    sendTimestamp: isNaN(timestamp) ? 0 : timestamp,
   };
 }
 

@@ -1,20 +1,7 @@
 /**
  * Date formatting utilities for chat messages
+ * All timestamps are expected to be in milliseconds.
  */
-
-/**
- * Convert timestamp to milliseconds if it's in seconds
- * Backend sends timestamps in UTC seconds, but JavaScript Date expects milliseconds.
- * Timestamps before year 2001 in milliseconds (978307200000) are assumed to be in seconds.
- */
-function toMilliseconds(timestamp: number): number {
-  // If timestamp is less than 10^12, it's likely in seconds (before year 2001 in ms)
-  // 10^12 ms = September 2001, so any reasonable timestamp after 2001 in ms will be > 10^12
-  if (timestamp < 1e12) {
-    return timestamp * 1000;
-  }
-  return timestamp;
-}
 
 /**
  * Format message date for date separators
@@ -29,7 +16,7 @@ export function formatMessageDate(timestamp: number | undefined): string {
   }
 
   try {
-    const date = new Date(toMilliseconds(timestamp));
+    const date = new Date(timestamp);
 
     // Check if date is valid
     if (isNaN(date.getTime())) {
@@ -72,7 +59,7 @@ export function formatMessageTime(timestamp: number | undefined): string {
   }
 
   try {
-    const date = new Date(toMilliseconds(timestamp));
+    const date = new Date(timestamp);
 
     // Check if date is valid
     if (isNaN(date.getTime())) {
@@ -102,7 +89,7 @@ export function formatConversationTime(timestamp: number | undefined): string {
   }
 
   try {
-    const date = new Date(toMilliseconds(timestamp));
+    const date = new Date(timestamp);
 
     // Check if date is valid
     if (isNaN(date.getTime())) {

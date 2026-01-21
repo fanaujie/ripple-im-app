@@ -485,171 +485,108 @@ impl<S: RippleStorage> DataSyncManager<S> {
         self.store_engine.conversation_exists(conversation_id).await
     }
 
+    /// Load latest messages for a conversation, filling any gaps from offline period
     pub async fn read_latest_messages(
         &self,
         conversation_id: String,
         read_size: u32,
         _last_read_message_id: String,
     ) -> anyhow::Result<ReadMessagesData> {
-        let storage_messages = self
+        // 1. Get cached messages from local storage
+        let mut storage_messages = self
             .store_engine
             .get_latest_messages(&conversation_id, read_size)
             .await?;
 
+        // 2. Check for gap between local cache and server
         let conversation = self
             .store_engine
             .get_conversation_by_id(&conversation_id)
             .await?;
-
         let server_last_msg_id = conversation
             .as_ref()
             .and_then(|c| c.last_message_id.as_ref());
-
         let cache_newest_msg_id = storage_messages.last().map(|m| &m.message_id);
 
         let has_gap = match (server_last_msg_id, cache_newest_msg_id) {
             (Some(server), Some(cache)) => server != cache,
-            (Some(_), None) => true, // Server has messages but cache is empty
+            (Some(_), None) => true,
             _ => false,
         };
 
-        // Cache hit: if we have cached messages, return them
-        // Even if there's a gap (newer messages on server), user can view cached messages
-        // New messages will arrive via WebSocket push
-        if !storage_messages.is_empty() {
-            if has_gap {
-                println!(
-                    "[DataSyncManager] Cache hit (with gap) for {}: {} messages, server={:?}, cache={:?}",
-                    conversation_id, storage_messages.len(), server_last_msg_id, cache_newest_msg_id
-                );
-            } else {
-                println!(
-                    "[DataSyncManager] Cache hit (no gap) for {}: {} messages",
-                    conversation_id,
-                    storage_messages.len()
-                );
-            }
-            return Ok(ReadMessagesData {
-                messages: storage_messages,
-            });
-        }
-
-        // Cache is empty, need to fetch from API
+        // 3. Fill gap if exists (fetch messages newer than cache)
         if has_gap {
-            println!(
-                "[DataSyncManager] Cache empty, fetching for {}: server_last_msg_id={:?}",
-                conversation_id, server_last_msg_id
-            );
-
-            let fetch_from = cache_newest_msg_id
+            let after_id = cache_newest_msg_id
                 .cloned()
                 .unwrap_or_else(|| "0".to_string());
 
+            println!(
+                "[DataSyncManager] Filling gap for {}: after_id={}, server_last={:?}",
+                conversation_id, after_id, server_last_msg_id
+            );
+
             let api_response = self
                 .ripple_api
-                .read_messages(conversation_id.clone(), fetch_from, read_size)
+                .read_messages_after(conversation_id.clone(), after_id, read_size)
                 .await?;
 
-            if api_response.code == 200 {
+            if api_response.code == 200 && !api_response.data.messages.is_empty() {
+                println!(
+                    "[DataSyncManager] Fetched {} new messages for {}",
+                    api_response.data.messages.len(),
+                    conversation_id
+                );
+
                 for msg in &api_response.data.messages {
                     self.store_engine.store_message(msg.clone()).await?;
                 }
-                let final_messages = self
-                    .store_engine
-                    .get_latest_messages(&conversation_id, read_size)
-                    .await?;
-
-                return Ok(ReadMessagesData {
-                    messages: final_messages,
-                });
+                storage_messages.extend(api_response.data.messages);
             }
         }
-        if storage_messages.is_empty() || storage_messages.len() < read_size as usize {
-            println!(
-                "[DataSyncManager] Cache insufficient for {}: fetching from API (cache_size={})",
-                conversation_id,
-                storage_messages.len()
-            );
-            return self
-                .fetch_and_cache_messages(conversation_id, "0".to_string(), read_size)
-                .await;
-        }
+
         Ok(ReadMessagesData {
             messages: storage_messages,
         })
     }
 
-    async fn fetch_and_cache_messages(
-        &self,
-        conversation_id: String,
-        message_id: String,
-        read_size: u32,
-    ) -> anyhow::Result<ReadMessagesData> {
-        let api_response = self
-            .ripple_api
-            .read_messages(conversation_id.clone(), message_id, read_size)
-            .await?;
-
-        if api_response.code != 200 {
-            eprintln!(
-                "[DataSyncManager] API returned error: code={}, message={}",
-                api_response.code, api_response.message
-            );
-            anyhow::bail!(
-                "Failed to read latest messages: code={}, message={}",
-                api_response.code,
-                api_response.message
-            )
-        }
-        for message_item in &api_response.data.messages {
-            self.store_engine
-                .store_message(message_item.clone())
-                .await?;
-        }
-
-        Ok(api_response.data)
-    }
-
+    /// Load older messages before a specific message ID (for pagination / scrolling up)
     pub async fn read_messages_before(
         &self,
         conversation_id: String,
         before_message_id: String,
         read_size: u32,
     ) -> anyhow::Result<ReadMessagesData> {
+        // 1. Try local cache first
         let storage_messages = self
             .store_engine
-            .get_messages_before(&conversation_id, before_message_id.as_str(), read_size)
+            .get_messages_before(&conversation_id, &before_message_id, read_size)
             .await?;
 
         if storage_messages.len() >= read_size as usize {
-            let messages: Vec<_> = storage_messages.into_iter().map(|msg| msg.into()).collect();
-            return Ok(ReadMessagesData { messages });
+            return Ok(ReadMessagesData {
+                messages: storage_messages,
+            });
         }
 
+        // 2. Fetch from API if local cache insufficient
         let api_response = self
             .ripple_api
             .read_messages(conversation_id.clone(), before_message_id, read_size)
             .await?;
 
         if api_response.code != 200 {
-            eprintln!(
-                "[DataSyncManager] API returned error: code={}, message={}",
-                api_response.code, api_response.message
-            );
             anyhow::bail!(
                 "Failed to read messages before: code={}, message={}",
                 api_response.code,
                 api_response.message
             )
         }
-        for message_item in &api_response.data.messages {
-            self.store_engine
-                .store_message(message_item.clone())
-                .await?;
+
+        for msg in &api_response.data.messages {
+            self.store_engine.store_message(msg.clone()).await?;
         }
-        Ok(ReadMessagesData {
-            messages: api_response.data.messages,
-        })
+
+        Ok(api_response.data)
     }
 
     /// Store a message in local cache (for WebSocket-received messages)
