@@ -514,9 +514,9 @@ impl<S: RippleStorage> DataSyncManager<S> {
             _ => false,
         };
 
-        // 3. Fill gap if exists (fetch messages newer than cache)
+        // 3. Fill gap if exists (fetch messages newer than cache in batches)
         if has_gap {
-            let after_id = cache_newest_msg_id
+            let mut after_id = cache_newest_msg_id
                 .cloned()
                 .unwrap_or_else(|| "0".to_string());
 
@@ -525,22 +525,36 @@ impl<S: RippleStorage> DataSyncManager<S> {
                 conversation_id, after_id, server_last_msg_id
             );
 
-            let api_response = self
-                .ripple_api
-                .read_messages_after(conversation_id.clone(), after_id, read_size)
-                .await?;
+            loop {
+                let api_response = self
+                    .ripple_api
+                    .read_messages_after(conversation_id.clone(), after_id.clone(), read_size)
+                    .await?;
 
-            if api_response.code == 200 && !api_response.data.messages.is_empty() {
+                if api_response.code != 200 || api_response.data.messages.is_empty() {
+                    break;
+                }
+
+                let fetched_count = api_response.data.messages.len();
                 println!(
                     "[DataSyncManager] Fetched {} new messages for {}",
-                    api_response.data.messages.len(),
-                    conversation_id
+                    fetched_count, conversation_id
                 );
+
+                // Update after_id for next iteration
+                if let Some(last_msg) = api_response.data.messages.last() {
+                    after_id = last_msg.message_id.clone();
+                }
 
                 for msg in &api_response.data.messages {
                     self.store_engine.store_message(msg.clone()).await?;
                 }
                 storage_messages.extend(api_response.data.messages);
+
+                // If we got less than requested, we've reached the end
+                if fetched_count < read_size as usize {
+                    break;
+                }
             }
         }
 
