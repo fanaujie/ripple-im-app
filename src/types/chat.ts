@@ -63,6 +63,8 @@ export interface ConversationItem {
   name?: string;
   /** Conversation avatar URL (for groups or custom avatars) */
   avatar?: string;
+  /** Bot session ID for bot conversations */
+  botSessionId?: string;
 }
 
 /**

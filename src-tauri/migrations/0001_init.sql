@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS conversations (
                                              last_message_text TEXT,
                                              last_message_timestamp INTEGER,
                                              name TEXT NOT NULL,
-                                             avatar TEXT
+                                             avatar TEXT,
+                                             bot_session_id TEXT
 );
 
 -- Conversations sync version (single row table)

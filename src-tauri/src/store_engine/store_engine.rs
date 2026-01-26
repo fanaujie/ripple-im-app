@@ -25,6 +25,7 @@ pub struct ConversationRecord {
     pub last_message_timestamp: Option<i64>,
     pub name: String,
     pub avatar: Option<String>,
+    pub bot_session_id: Option<String>,
 }
 
 impl From<ConversationItem> for ConversationRecord {
@@ -40,6 +41,7 @@ impl From<ConversationItem> for ConversationRecord {
             last_message_timestamp: item.last_message_timestamp,
             name: item.name,
             avatar: item.avatar,
+            bot_session_id: item.bot_session_id,
         }
     }
 }
@@ -57,6 +59,7 @@ impl From<ConversationChange> for ConversationRecord {
             last_message_timestamp: None, // ConversationChange doesn't include last_message_timestamp
             name: item.name.unwrap(),
             avatar: item.avatar,
+            bot_session_id: item.bot_session_id,
         }
     }
 }
@@ -111,6 +114,10 @@ pub enum ConversationStorageAction {
     },
     Delete {
         conversation_id: String,
+    },
+    UpdateBotSessionId {
+        conversation_id: String,
+        bot_session_id: String,
     },
 }
 
@@ -637,6 +644,20 @@ impl RippleStorage for MemoryStore {
                     Ok(None)
                 }
             }
+            ConversationStorageAction::UpdateBotSessionId {
+                conversation_id,
+                bot_session_id,
+            } => match inner.conversations.get_mut(&conversation_id) {
+                Some(conv) => {
+                    conv.bot_session_id = Some(bot_session_id);
+                    if need_result {
+                        Ok(Some(conv.clone()))
+                    } else {
+                        Ok(None)
+                    }
+                }
+                None => Ok(None),
+            },
         }
     }
     async fn conversation_exists(&self, conversation_id: &str) -> anyhow::Result<bool> {

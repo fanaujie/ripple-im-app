@@ -379,6 +379,7 @@ pub async fn send_message(
         text_content: text,
         file_url,
         file_name,
+        session_id: None,
     };
 
     let response = state_ripple.send_message(request).await?;

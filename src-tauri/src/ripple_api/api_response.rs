@@ -237,6 +237,8 @@ pub struct ConversationItem {
     pub name: String,
     #[serde(rename = "avatar")]
     pub avatar: Option<String>,
+    #[serde(rename = "botSessionId")]
+    pub bot_session_id: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -300,6 +302,7 @@ pub enum ConversationOperation {
     UpdateConversationAvatar = 4,
     UpdateConversationNameAvatar = 5,
     RemoverConversation = 6,
+    UpdateBotSessionId = 7,
     Unknown,
 }
 
@@ -312,6 +315,7 @@ impl From<i32> for ConversationOperation {
             4 => ConversationOperation::UpdateConversationAvatar,
             5 => ConversationOperation::UpdateConversationNameAvatar,
             6 => ConversationOperation::RemoverConversation,
+            7 => ConversationOperation::UpdateBotSessionId,
             _ => ConversationOperation::Unknown,
         }
     }
@@ -330,7 +334,8 @@ impl Categorized for ConversationOperation {
             ConversationOperation::UpdateLastReadMessageId
             | ConversationOperation::UpdateConversationName
             | ConversationOperation::UpdateConversationAvatar
-            | ConversationOperation::UpdateConversationNameAvatar => OpCategory::Update,
+            | ConversationOperation::UpdateConversationNameAvatar
+            | ConversationOperation::UpdateBotSessionId => OpCategory::Update,
             ConversationOperation::RemoverConversation => OpCategory::Delete,
             ConversationOperation::Unknown => OpCategory::Update,
         }
@@ -353,6 +358,8 @@ pub struct ConversationChange {
     pub name: Option<String>,
     #[serde(rename = "avatar")]
     pub avatar: Option<String>,
+    #[serde(rename = "botSessionId")]
+    pub bot_session_id: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -397,6 +404,8 @@ pub struct SendMessageRequest {
     pub file_url: Option<String>,
     #[serde(rename = "fileName", skip_serializing_if = "Option::is_none")]
     pub file_name: Option<String>,
+    #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -905,4 +914,48 @@ pub struct AbortUploadRequest {
 pub struct AbortUploadResponse {
     pub code: i32,
     pub message: String,
+}
+
+// ==================== Bot Types ====================
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct BotData {
+    #[serde(rename = "botId")]
+    pub bot_id: String,
+    pub name: String,
+    pub avatar: Option<String>,
+    pub description: Option<String>,
+    #[serde(rename = "responseMode")]
+    pub response_mode: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct BotsListData {
+    pub bots: Vec<BotData>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct BotsListResponse {
+    pub code: i32,
+    pub message: String,
+    pub data: Option<BotsListData>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct BotSessionData {
+    #[serde(rename = "sessionId")]
+    pub session_id: String,
+    #[serde(rename = "botId")]
+    pub bot_id: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: i64,
+    #[serde(rename = "lastActiveAt")]
+    pub last_active_at: i64,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct BotSessionResponse {
+    pub code: i32,
+    pub message: String,
+    pub data: Option<BotSessionData>,
 }

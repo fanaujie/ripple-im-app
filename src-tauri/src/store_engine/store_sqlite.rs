@@ -425,7 +425,7 @@ impl RippleStorage for SqliteStore {
 
         for conv in conversations {
             sqlx::query(
-                "INSERT INTO conversations (conversation_id, peer_id, group_id, last_message_id, last_read_message_id, unread_count, last_message_text, last_message_timestamp, name, avatar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO conversations (conversation_id, peer_id, group_id, last_message_id, last_read_message_id, unread_count, last_message_text, last_message_timestamp, name, avatar, bot_session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(&conv.conversation_id)
             .bind(&conv.peer_id)
@@ -437,6 +437,7 @@ impl RippleStorage for SqliteStore {
             .bind(conv.last_message_timestamp)
             .bind(&conv.name)
             .bind(&conv.avatar)
+            .bind(&conv.bot_session_id)
             .execute(&self.pool)
             .await?;
         }
@@ -463,7 +464,7 @@ impl RippleStorage for SqliteStore {
         match action {
             ConversationStorageAction::Create(conv) => {
                 sqlx::query(
-                    "INSERT OR REPLACE INTO conversations (conversation_id, peer_id, group_id, last_message_id, last_read_message_id, unread_count, last_message_text, last_message_timestamp, name, avatar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT OR REPLACE INTO conversations (conversation_id, peer_id, group_id, last_message_id, last_read_message_id, unread_count, last_message_text, last_message_timestamp, name, avatar, bot_session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 )
                 .bind(&conv.conversation_id)
                 .bind(&conv.peer_id)
@@ -475,6 +476,7 @@ impl RippleStorage for SqliteStore {
                 .bind(conv.last_message_timestamp)
                 .bind(&conv.name)
                 .bind(&conv.avatar)
+                .bind(&conv.bot_session_id)
                 .execute(&self.pool)
                 .await?;
                 if need_result {
@@ -561,6 +563,23 @@ impl RippleStorage for SqliteStore {
                     .await?;
                 Ok(removed)
             }
+            ConversationStorageAction::UpdateBotSessionId {
+                conversation_id,
+                bot_session_id,
+            } => {
+                sqlx::query(
+                    "UPDATE conversations SET bot_session_id = ? WHERE conversation_id = ?",
+                )
+                .bind(&bot_session_id)
+                .bind(&conversation_id)
+                .execute(&self.pool)
+                .await?;
+                if need_result {
+                    self.get_conversation_by_id(&conversation_id).await
+                } else {
+                    Ok(None)
+                }
+            }
         }
     }
 
@@ -588,8 +607,9 @@ impl RippleStorage for SqliteStore {
             Option<i64>,
             String,
             Option<String>,
+            Option<String>,
         )> = sqlx::query_as(
-            "SELECT conversation_id, peer_id, group_id, last_message_id, last_read_message_id, unread_count, last_message_text, last_message_timestamp, name, avatar FROM conversations WHERE conversation_id = ?",
+            "SELECT conversation_id, peer_id, group_id, last_message_id, last_read_message_id, unread_count, last_message_text, last_message_timestamp, name, avatar, bot_session_id FROM conversations WHERE conversation_id = ?",
         )
         .bind(conversation_id)
         .fetch_optional(&self.pool)
@@ -607,6 +627,7 @@ impl RippleStorage for SqliteStore {
                 last_message_timestamp,
                 name,
                 avatar,
+                bot_session_id,
             )) => Ok(Some(ConversationRecord {
                 conversation_id,
                 peer_id,
@@ -618,6 +639,7 @@ impl RippleStorage for SqliteStore {
                 last_message_timestamp,
                 name,
                 avatar,
+                bot_session_id,
             })),
             None => Ok(None),
         }
@@ -635,8 +657,9 @@ impl RippleStorage for SqliteStore {
             Option<i64>,
             String,
             Option<String>,
+            Option<String>,
         )> = sqlx::query_as(
-            "SELECT conversation_id, peer_id, group_id, last_message_id, last_read_message_id, unread_count, last_message_text, last_message_timestamp, name, avatar FROM conversations",
+            "SELECT conversation_id, peer_id, group_id, last_message_id, last_read_message_id, unread_count, last_message_text, last_message_timestamp, name, avatar, bot_session_id FROM conversations",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -655,6 +678,7 @@ impl RippleStorage for SqliteStore {
                     last_message_timestamp,
                     name,
                     avatar,
+                    bot_session_id,
                 )| ConversationRecord {
                     conversation_id,
                     peer_id,
@@ -666,6 +690,7 @@ impl RippleStorage for SqliteStore {
                     last_message_timestamp,
                     name,
                     avatar,
+                    bot_session_id,
                 },
             )
             .collect())

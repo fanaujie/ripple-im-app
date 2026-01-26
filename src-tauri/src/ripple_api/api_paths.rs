@@ -27,6 +27,9 @@ pub struct ApiPaths {
     // User groups paths
     pub user_groups: String,
     pub user_groups_sync: String,
+    // Bot paths
+    pub bots: String,
+    pub bot_sessions: String,
 }
 
 impl ApiPaths {
@@ -64,6 +67,9 @@ impl ApiPaths {
             // User groups paths
             user_groups: format!("{}/api/users/me/groups", api_gateway_url),
             user_groups_sync: format!("{}/api/users/me/groups/sync", api_gateway_url),
+            // Bot paths
+            bots: format!("{}/api/bots", api_gateway_url),
+            bot_sessions: format!("{}/api/users/me/bot-sessions", api_gateway_url),
         }
     }
 }

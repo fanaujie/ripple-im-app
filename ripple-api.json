@@ -26,11 +26,107 @@
       "description": "Group management APIs"
     },
     {
+      "name": "Bots",
+      "description": "Bot discovery APIs"
+    },
+    {
+      "name": "Admin Bots",
+      "description": "Admin bot management APIs"
+    },
+    {
       "name": "Users",
       "description": "User-related APIs including profile, conversations, relations, and groups"
+    },
+    {
+      "name": "Bot Sessions",
+      "description": "Bot session management APIs"
     }
   ],
   "paths": {
+    "/api/admin/bots/{botId}": {
+      "put": {
+        "tags": [
+          "Admin Bots"
+        ],
+        "summary": "Update bot configuration",
+        "description": "Updates the webhook configuration for an existing bot",
+        "operationId": "updateBot",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BotUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Bot updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Bot not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Admin Bots"
+        ],
+        "summary": "Delete a bot",
+        "description": "Deletes a bot and its configuration",
+        "operationId": "deleteBot",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Bot deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Bot not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
     "/api/users/me/friends": {
       "post": {
         "tags": [
@@ -170,6 +266,44 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/bot-sessions/{botId}/new": {
+      "post": {
+        "tags": [
+          "Bot Sessions"
+        ],
+        "summary": "Create new bot session",
+        "description": "Creates a new session with a bot, clearing any previous conversation context",
+        "operationId": "createNewSession",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Session created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotSessionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Bot not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotSessionResponse"
                 }
               }
             }
@@ -468,6 +602,53 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/admin/bots": {
+      "post": {
+        "tags": [
+          "Admin Bots"
+        ],
+        "summary": "Register a new bot",
+        "description": "Creates a new bot user with webhook configuration",
+        "operationId": "registerBot",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BotRegistrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Bot registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotRegistrationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or account already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotRegistrationResponse"
                 }
               }
             }
@@ -1293,7 +1474,7 @@
           "Users"
         ],
         "summary": "Read messages",
-        "description": "Retrieve messages from a conversation before the specified message ID. Returns messages in descending order by message ID (newest to oldest relative to the anchor message).",
+        "description": "Retrieve messages from a conversation. Use beforeMessageId to fetch older messages or afterMessageId to fetch newer messages. Results are always ordered by message ID ascending. Exactly one of beforeMessageId or afterMessageId must be provided.",
         "operationId": "readMessages",
         "parameters": [
           {
@@ -1306,10 +1487,19 @@
             }
           },
           {
-            "name": "messageId",
+            "name": "beforeMessageId",
             "in": "query",
-            "description": "Message ID to read from (fetch messages before this ID)",
-            "required": true,
+            "description": "Fetch messages before this ID (exclusive)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "afterMessageId",
+            "in": "query",
+            "description": "Fetch messages after this ID (exclusive)",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -1317,7 +1507,7 @@
           {
             "name": "readSize",
             "in": "query",
-            "description": "Number of messages to retrieve (default: 50, max: 200)",
+            "description": "Number of messages to retrieve (default: 50, max: 200 for afterMessageId and beforeMessageId)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -1333,6 +1523,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReadMessagesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
                 }
               }
             }
@@ -1403,6 +1603,44 @@
         ]
       }
     },
+    "/api/users/me/bot-sessions/{botId}": {
+      "get": {
+        "tags": [
+          "Bot Sessions"
+        ],
+        "summary": "Get bot session",
+        "description": "Retrieves the current session information with a bot",
+        "operationId": "getSession",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Session retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotSessionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotSessionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
     "/api/groups/{groupId}/members/sync": {
       "get": {
         "tags": [
@@ -1448,6 +1686,33 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CommonResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer Authentication": []
+          }
+        ]
+      }
+    },
+    "/api/bots": {
+      "get": {
+        "tags": [
+          "Bots"
+        ],
+        "summary": "List available bots",
+        "description": "Retrieves a list of all active bots available for chat",
+        "operationId": "listBots",
+        "responses": {
+          "200": {
+            "description": "Bots retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotsListResponse"
                 }
               }
             }
@@ -1558,11 +1823,19 @@
   },
   "components": {
     "schemas": {
-      "AddFriendRequest": {
+      "BotUpdateRequest": {
         "type": "object",
-        "description": "Add friend request",
         "properties": {
-          "targetUserId": {
+          "webhookUrl": {
+            "type": "string"
+          },
+          "apiKey": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "responseMode": {
             "type": "string"
           }
         }
@@ -1575,6 +1848,15 @@
             "format": "int32"
           },
           "message": {
+            "type": "string"
+          }
+        }
+      },
+      "AddFriendRequest": {
+        "type": "object",
+        "description": "Add friend request",
+        "properties": {
+          "targetUserId": {
             "type": "string"
           }
         }
@@ -1667,6 +1949,9 @@
           },
           "fileName": {
             "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
           }
         },
         "required": [
@@ -1693,6 +1978,40 @@
         "properties": {
           "messageId": {
             "type": "string"
+          }
+        }
+      },
+      "BotSessionData": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "botId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastActiveAt": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "BotSessionResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/BotSessionData"
           }
         }
       },
@@ -1781,6 +2100,69 @@
           "newMemberIds",
           "senderId"
         ]
+      },
+      "BotRegistrationRequest": {
+        "type": "object",
+        "properties": {
+          "account": {
+            "type": "string",
+            "minLength": 1
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "avatar": {
+            "type": "string"
+          },
+          "webhookUrl": {
+            "type": "string",
+            "minLength": 1
+          },
+          "apiKey": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "responseMode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "account",
+          "displayName",
+          "webhookUrl"
+        ]
+      },
+      "BotRegistrationData": {
+        "type": "object",
+        "properties": {
+          "botId": {
+            "type": "string"
+          },
+          "account": {
+            "type": "string"
+          },
+          "responseMode": {
+            "type": "string"
+          }
+        }
+      },
+      "BotRegistrationResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/BotRegistrationData"
+          }
+        }
       },
       "UpdateProfileRequest": {
         "type": "object",
@@ -2131,6 +2513,9 @@
           },
           "lastMessageId": {
             "type": "string"
+          },
+          "botSessionId": {
+            "type": "string"
           }
         }
       },
@@ -2264,6 +2649,9 @@
             "type": "string"
           },
           "avatar": {
+            "type": "string"
+          },
+          "botSessionId": {
             "type": "string"
           }
         }
@@ -2413,6 +2801,52 @@
           },
           "data": {
             "$ref": "#/components/schemas/GroupSyncData"
+          }
+        }
+      },
+      "BotData": {
+        "type": "object",
+        "properties": {
+          "botId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "avatar": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "responseMode": {
+            "type": "string"
+          }
+        }
+      },
+      "BotsListData": {
+        "type": "object",
+        "properties": {
+          "bots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BotData"
+            }
+          }
+        }
+      },
+      "BotsListResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/BotsListData"
           }
         }
       }

@@ -701,6 +701,12 @@ impl<S: RippleStorage> DataSyncManager<S> {
             ConversationOperation::RemoverConversation => ConversationStorageAction::Delete {
                 conversation_id: change.conversation_id,
             },
+            ConversationOperation::UpdateBotSessionId => {
+                ConversationStorageAction::UpdateBotSessionId {
+                    conversation_id: change.conversation_id,
+                    bot_session_id: change.bot_session_id.unwrap(),
+                }
+            }
             _ => {
                 panic!("[DataSyncManager] Unknown conversation operation")
             }

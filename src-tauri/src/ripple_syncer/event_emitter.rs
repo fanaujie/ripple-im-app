@@ -36,6 +36,8 @@ pub struct UIConversationItem {
     pub name: String,
     #[serde(rename = "avatar")]
     pub avatar: Option<String>,
+    #[serde(rename = "botSessionId")]
+    pub bot_session_id: Option<String>,
 }
 
 impl From<ConversationRecord> for UIConversationItem {
@@ -56,6 +58,7 @@ impl From<ConversationRecord> for UIConversationItem {
             last_message_timestamp: item.last_message_timestamp,
             name: item.name,
             avatar: item.avatar,
+            bot_session_id: item.bot_session_id,
         }
     }
 }

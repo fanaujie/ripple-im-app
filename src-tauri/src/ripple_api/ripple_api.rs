@@ -1,14 +1,14 @@
 use crate::ripple_api::api_paths::ApiPaths;
 use crate::ripple_api::api_response::{
     AbortUploadRequest, AbortUploadResponse, AddFriendRequest, BlockUserRequest,
-    ChunkUploadResponse, CommonResponse, CompleteUploadRequest, CompleteUploadResponse,
-    ConversationSummariesResponse, ConversationSyncResponse, ConversationsResponse,
-    CreateGroupRequest, CreateGroupResponse, GetGroupMembersResponse, GetUserGroupsResponse,
-    GroupSyncResponse, InitiateUploadRequest, InitiateUploadResponse, InviteGroupMemberRequest,
-    MessageResponse, ReadMessagesResponse, RelationsPageResponse, RelationsSyncResponse,
-    SendMessageRequest, SingleUploadResponse, UpdateBlockedUserRequest, UpdateFriendRequest,
-    UpdateGroupRequest, UpdateProfileRequest, UpdateReadPositionRequest, UploadImageResponse,
-    UserGroupSyncResponse, UserProfileResponse,
+    BotSessionResponse, BotsListResponse, ChunkUploadResponse, CommonResponse,
+    CompleteUploadRequest, CompleteUploadResponse, ConversationSummariesResponse,
+    ConversationSyncResponse, ConversationsResponse, CreateGroupRequest, CreateGroupResponse,
+    GetGroupMembersResponse, GetUserGroupsResponse, GroupSyncResponse, InitiateUploadRequest,
+    InitiateUploadResponse, InviteGroupMemberRequest, MessageResponse, ReadMessagesResponse,
+    RelationsPageResponse, RelationsSyncResponse, SendMessageRequest, SingleUploadResponse,
+    UpdateBlockedUserRequest, UpdateFriendRequest, UpdateGroupRequest, UpdateProfileRequest,
+    UpdateReadPositionRequest, UploadImageResponse, UserGroupSyncResponse, UserProfileResponse,
 };
 use crate::ripple_api::oauth_client::OauthClient;
 use crate::store_engine::StoreEngine;
@@ -1047,6 +1047,75 @@ where
             )
             .await?;
         Ok(res.json::<UserGroupSyncResponse>().await?)
+    }
+
+    // ==================== Bot APIs ====================
+
+    /// List all available bots
+    pub async fn list_bots(&self) -> anyhow::Result<BotsListResponse> {
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| async move {
+                    self.reqwest_client
+                        .get(&self.api_paths.bots)
+                        .header("Authorization", format!("Bearer {}", access_token))
+                        .send()
+                        .await
+                        .map_err(|e| anyhow!("Failed to list bots: {}", e))
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<BotsListResponse>().await?)
+    }
+
+    /// Get existing bot session
+    pub async fn get_bot_session(&self, bot_id: String) -> anyhow::Result<BotSessionResponse> {
+        let url = format!("{}/{}", &self.api_paths.bot_sessions, bot_id);
+
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let url = url.clone();
+                    async move {
+                        self.reqwest_client
+                            .get(&url)
+                            .header("Authorization", format!("Bearer {}", access_token))
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to get bot session: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<BotSessionResponse>().await?)
+    }
+
+    /// Create a new bot session
+    pub async fn create_new_bot_session(
+        &self,
+        bot_id: String,
+    ) -> anyhow::Result<BotSessionResponse> {
+        let url = format!("{}/{}/new", &self.api_paths.bot_sessions, bot_id);
+
+        let res = self
+            .execute_with_auth_retry(
+                |access_token| {
+                    let url = url.clone();
+                    async move {
+                        self.reqwest_client
+                            .post(&url)
+                            .header("Authorization", format!("Bearer {}", access_token))
+                            .send()
+                            .await
+                            .map_err(|e| anyhow!("Failed to create new bot session: {}", e))
+                    }
+                },
+                1,
+            )
+            .await?;
+        Ok(res.json::<BotSessionResponse>().await?)
     }
 
     // ==================== Attachment Upload APIs ====================
