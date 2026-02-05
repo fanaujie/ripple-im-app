@@ -36,10 +36,6 @@
     {
       "name": "Users",
       "description": "User-related APIs including profile, conversations, relations, and groups"
-    },
-    {
-      "name": "Bot Sessions",
-      "description": "Bot session management APIs"
     }
   ],
   "paths": {
@@ -281,12 +277,22 @@
     "/api/users/me/bot-sessions/{botId}/new": {
       "post": {
         "tags": [
-          "Bot Sessions"
+          "Users"
         ],
         "summary": "Create new bot session",
         "description": "Creates a new session with a bot, clearing any previous conversation context",
         "operationId": "createNewSession",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "botId",
+            "in": "path",
+            "description": "Bot user ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Session created successfully",
@@ -1603,44 +1609,6 @@
         ]
       }
     },
-    "/api/users/me/bot-sessions/{botId}": {
-      "get": {
-        "tags": [
-          "Bot Sessions"
-        ],
-        "summary": "Get bot session",
-        "description": "Retrieves the current session information with a bot",
-        "operationId": "getSession",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Session retrieved successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BotSessionResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Session not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BotSessionResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer Authentication": []
-          }
-        ]
-      }
-    },
     "/api/groups/{groupId}/members/sync": {
       "get": {
         "tags": [
@@ -1939,6 +1907,9 @@
             "type": "string"
           },
           "groupId": {
+            "type": "string"
+          },
+          "botId": {
             "type": "string"
           },
           "textContent": {

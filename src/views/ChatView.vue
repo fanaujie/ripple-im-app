@@ -17,6 +17,7 @@
           v-for="conv in conversations"
           :key="conv.conversationId"
           :conversation="conv"
+          :is-bot="isBot(conv.peerId)"
           @click="selectConversation"
         />
       </div>
@@ -24,7 +25,7 @@
 
     <!-- Right: Chat Window or Empty State -->
     <div class="flex-1 flex flex-col bg-gray-50">
-      <template v-if="selectedConversation || targetUserId">
+      <template v-if="selectedConversation || targetUserId || targetBotId">
         <!-- Group Chat Header -->
         <GroupChatHeader
           v-if="isGroupChat && selectedConversation"
@@ -37,16 +38,36 @@
           @leave-group="handleGroupAction('leave-group')"
         />
 
-        <!-- 1v1 Chat Header -->
+        <!-- 1v1 / Bot Chat Header -->
         <div v-else class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <img
-              :src="selectedAvatarUrl"
-              @error="onImageError"
-              class="w-10 h-10 rounded-full object-cover"
-            />
+            <div class="relative">
+              <img
+                :src="selectedAvatarUrl"
+                @error="onImageError"
+                class="w-10 h-10 rounded-full object-cover"
+              />
+              <!-- Bot badge on avatar -->
+              <div
+                v-if="isBotConversation"
+                class="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-2.5 h-2.5 text-white">
+                  <path d="M14 6H6v8h8V6Z" />
+                  <path fill-rule="evenodd" d="M9.25 3V1.75a.75.75 0 0 1 1.5 0V3h1.5V1.75a.75.75 0 0 1 1.5 0V3h.5A2.75 2.75 0 0 1 17 5.75v.5h1.25a.75.75 0 0 1 0 1.5H17v1.5h1.25a.75.75 0 0 1 0 1.5H17v1.5h1.25a.75.75 0 0 1 0 1.5H17v.5A2.75 2.75 0 0 1 14.25 17h-.5v1.25a.75.75 0 0 1-1.5 0V17h-1.5v1.25a.75.75 0 0 1-1.5 0V17h-1.5v1.25a.75.75 0 0 1-1.5 0V17h-.5A2.75 2.75 0 0 1 3 14.25v-.5H1.75a.75.75 0 0 1 0-1.5H3v-1.5H1.75a.75.75 0 0 1 0-1.5H3v-1.5H1.75a.75.75 0 0 1 0-1.5H3v-.5A2.75 2.75 0 0 1 5.75 3h.5V1.75a.75.75 0 0 1 1.5 0V3h1.5ZM4.5 5.75c0-.69.56-1.25 1.25-1.25h8.5c.69 0 1.25.56 1.25 1.25v8.5c0 .69-.56 1.25-1.25 1.25h-8.5c-.69 0-1.25-.56-1.25-1.25v-8.5Z" clip-rule="evenodd" />
+                </svg>
+              </div>
+            </div>
             <div class="font-medium">{{ selectedDisplayName }}</div>
           </div>
+          <!-- New Chat button for bot conversations -->
+          <button
+            v-if="isBotConversation"
+            @click="openNewChatDialog"
+            class="px-3 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+          >
+            New Chat
+          </button>
         </div>
 
         <!-- Stranger Message Banner -->
@@ -212,6 +233,33 @@
               </div>
             </div>
           </div>
+
+          <!-- Bot Streaming Message -->
+          <div v-if="currentStreamingMessage" class="flex items-end gap-2 justify-start">
+            <img
+              :src="getMessageSenderAvatarUrl(currentStreamingMessage.senderId)"
+              @error="onImageError"
+              class="w-8 h-8 rounded-full object-cover flex-shrink-0 self-start"
+            />
+            <div class="flex flex-col">
+              <div class="max-w-md px-4 py-2 rounded-2xl bg-white text-gray-900">
+                <!-- Error state -->
+                <div v-if="currentStreamingMessage.isError" class="text-red-500 text-sm">
+                  {{ currentStreamingMessage.content }}
+                </div>
+                <!-- Streaming content -->
+                <div v-else>
+                  <span class="whitespace-pre-wrap">{{ currentStreamingMessage.content }}</span>
+                  <!-- Typing indicator -->
+                  <span v-if="currentStreamingMessage.isStreaming" class="inline-flex items-center ml-1 align-middle">
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot" style="animation-delay: 0.2s"></span>
+                    <span class="typing-dot" style="animation-delay: 0.4s"></span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Blocked User Notification (replaces input area) -->
@@ -230,7 +278,7 @@
             <!-- File Attachment Button -->
             <button
               @click="handleAttachFile"
-              :disabled="uploading"
+              :disabled="uploading || isInputDisabledByStreaming"
               class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               title="Attach file"
             >
@@ -244,15 +292,15 @@
               @keydown.enter.exact="handleKeydownEnter"
               @compositionstart="isComposing = true"
               @compositionend="onCompositionEnd"
-              placeholder="Type a message..."
+              :placeholder="isInputDisabledByStreaming ? 'Waiting for bot response...' : 'Type a message...'"
               rows="1"
-              :disabled="uploading"
+              :disabled="uploading || isInputDisabledByStreaming"
               class="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
               style="max-height: 120px"
             ></textarea>
             <button
               @click="handleSend"
-              :disabled="!messageInput.trim() || uploading"
+              :disabled="!messageInput.trim() || uploading || isInputDisabledByStreaming"
               class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Send
@@ -326,6 +374,39 @@
       @close="closeFileInfo"
       @download="handleDownload"
     />
+
+    <!-- New Chat Confirmation Dialog (for Bot conversations) -->
+    <div
+      v-if="isNewChatDialogOpen"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      @click="closeNewChatDialog"
+    >
+      <div
+        class="bg-white rounded-xl p-6 m-4 min-w-80 max-w-md"
+        @click.stop
+      >
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Start New Chat?</h3>
+        <p class="text-gray-600 mb-6">
+          Starting a new chat will clear the current conversation history. The bot will not remember previous messages.
+        </p>
+        <div class="flex justify-end space-x-3">
+          <button
+            @click="closeNewChatDialog"
+            :disabled="isCreatingNewSession"
+            class="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            @click="confirmNewChat"
+            :disabled="isCreatingNewSession"
+            class="px-4 py-2 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50"
+          >
+            {{ isCreatingNewSession ? 'Creating...' : 'Start New Chat' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -339,6 +420,7 @@ import { useRelationActions } from '../composables/useRelationActions';
 import { useUserProfileDisplay } from '../composables/useUserProfileDisplay';
 import { useFileUpload } from '../composables/chat/useFileUpload';
 import { useGroupMembersCache, type SenderInfo } from '../composables/chat/useGroupMembersCache';
+import { useBotsDisplay } from '../composables/useBotsDisplay';
 import { getConversationDisplayName, getConversationAvatar } from '../types/chat';
 import type { ConversationDisplay } from '../types/chat';
 import { MessageType } from '../types/chat';
@@ -357,6 +439,7 @@ import FileMessageBubble from '../components/chat/FileMessageBubble.vue';
 import ImagePreviewModal from '../components/chat/ImagePreviewModal.vue';
 import FileInfoModal from '../components/chat/FileInfoModal.vue';
 import defaultAvatarUrl from '../assets/default-avatar.svg';
+import defaultBotAvatarUrl from '../assets/default-bot-avatar.svg';
 
 defineOptions({
   name: 'ChatView',
@@ -384,6 +467,9 @@ const { fetchGroupMembers, getSenderInfo, getGroupMemberCount, useGroupMemberCha
 // Listen for group member changes (join/leave) and auto-refresh cache
 useGroupMemberChangeListener();
 
+// Bots display (for bot identification and session management)
+const { createBotSession, isBot, getBot } = useBotsDisplay();
+
 // File preview modal state
 const isImagePreviewOpen = ref(false);
 const isFileInfoOpen = ref(false);
@@ -396,6 +482,11 @@ const isViewMembersDialogOpen = ref(false);
 const isEditGroupDialogOpen = ref(false);
 const isLeaveGroupDialogOpen = ref(false);
 
+// Bot-related state
+const targetBotId = ref<string | null>(null);
+const isNewChatDialogOpen = ref(false);
+const isCreatingNewSession = ref(false);
+
 // Chat display (auto-initializes conversations via onMounted)
 const {
   conversations,
@@ -405,6 +496,11 @@ const {
   markConversationRead,
   getConversationMessages,
   setActiveConversation,
+  clearConversationMessages,
+  resetConversationForNewSession,
+  getStreamingMessage,
+  isBotStreaming,
+  setBotStreamingLock,
 } = useChatDisplay(relationsMap, currentUserId);
 
 // Selected conversation
@@ -480,7 +576,8 @@ function getMessageSenderInfo(senderId: string): SenderInfo | undefined {
  */
 function getMessageSenderAvatarUrl(senderId: string): string {
   const senderInfo = getMessageSenderInfo(senderId);
-  if (!senderInfo?.avatar) return defaultAvatarUrl;
+  const fallback = isBot(senderId) ? defaultBotAvatarUrl : defaultAvatarUrl;
+  if (!senderInfo?.avatar) return fallback;
 
   const avatar = senderInfo.avatar;
   if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
@@ -502,6 +599,10 @@ const selectedDisplayName = computed(() => {
   if (selectedConversation.value) {
     return getConversationDisplayName(selectedConversation.value);
   }
+  // Use bot info if starting new bot conversation
+  if (currentBotInfo.value) {
+    return currentBotInfo.value.name;
+  }
   // Use target user info if starting new conversation
   if (targetUserInfo.value) {
     return targetUserInfo.value.remarkName || targetUserInfo.value.nickName || 'Unknown';
@@ -510,10 +611,22 @@ const selectedDisplayName = computed(() => {
 });
 
 const selectedAvatarUrl = computed(() => {
+  const botFallback = isBotConversation.value ? defaultBotAvatarUrl : defaultAvatarUrl;
+
   // Use conversation avatar if available
   if (selectedConversation.value) {
     const avatar = getConversationAvatar(selectedConversation.value);
-    if (!avatar) return defaultAvatarUrl;
+    if (!avatar) return botFallback;
+    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+      return avatar;
+    }
+    return `asset://localhost/${avatar}`;
+  }
+
+  // Use bot avatar if starting new bot conversation
+  if (currentBotInfo.value) {
+    if (!currentBotInfo.value.avatar) return defaultBotAvatarUrl;
+    const avatar = currentBotInfo.value.avatar;
     if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
       return avatar;
     }
@@ -534,6 +647,9 @@ const selectedAvatarUrl = computed(() => {
 
 // Determine if current conversation is with a stranger
 const isStrangerConversation = computed(() => {
+  // Bot conversations don't have relation checks
+  if (isBotConversation.value) return false;
+
   // Get peer ID from selected conversation or target user
   const peerId = selectedConversation.value?.peerId || targetUserId.value;
 
@@ -573,6 +689,9 @@ const isStrangerConversation = computed(() => {
 
 // Determine if current conversation is with a blocked user
 const isBlockedConversation = computed(() => {
+  // Bot conversations don't have relation checks
+  if (isBotConversation.value) return false;
+
   // Get peer ID from selected conversation or target user
   const peerId = selectedConversation.value?.peerId || targetUserId.value;
 
@@ -599,6 +718,40 @@ const isBlockedConversation = computed(() => {
 // Determine if current conversation is a group chat
 const isGroupChat = computed(() => {
   return !!selectedConversation.value?.groupId;
+});
+
+// Determine if current conversation is with a bot
+const isBotConversation = computed(() => {
+  // Check targetBotId first (when navigating from Bots tab)
+  if (targetBotId.value) return true;
+  // Check if conversation's peerId is a bot
+  const peerId = selectedConversation.value?.peerId;
+  return peerId ? isBot(peerId) : false;
+});
+
+// Get current bot info
+const currentBotInfo = computed(() => {
+  if (targetBotId.value) {
+    return getBot(targetBotId.value);
+  }
+  const peerId = selectedConversation.value?.peerId;
+  return peerId ? getBot(peerId) : undefined;
+});
+
+// Get bot session ID from conversation
+const currentBotSessionId = computed(() => {
+  return selectedConversation.value?.botSessionId || null;
+});
+
+// Bot streaming state
+const currentStreamingMessage = computed(() => {
+  if (!selectedConversation.value) return null;
+  return getStreamingMessage(selectedConversation.value.conversationId);
+});
+
+const isInputDisabledByStreaming = computed(() => {
+  if (!isBotConversation.value || !selectedConversation.value) return false;
+  return isBotStreaming(selectedConversation.value.conversationId);
 });
 
 // Get group member count from cache
@@ -671,8 +824,8 @@ async function handleSend() {
     return;
   }
 
-  // Must have either a selected conversation or a target user
-  if (!selectedConversation.value && !targetUserId.value) {
+  // Must have either a selected conversation, target user, or target bot
+  if (!selectedConversation.value && !targetUserId.value && !targetBotId.value) {
     return;
   }
 
@@ -681,18 +834,43 @@ async function handleSend() {
   const conversationId = selectedConversation.value?.conversationId || '';
   // For group chats: receiverId is null, groupId is set
   // For direct chats: receiverId is set, groupId is null
+  // For bot chats: receiverId is null, botId is set
   const groupId = selectedConversation.value?.groupId || null;
-  const receiverId = groupId ? null : (selectedConversation.value?.peerId || targetUserId.value || '');
+  const receiverId = (groupId || isBotConversation.value) ? null : (selectedConversation.value?.peerId || targetUserId.value || '');
 
   try {
-    await sendMessage(currentUserId.value, conversationId, receiverId, content, groupId);
+    // Get session ID and bot ID for bot conversations
+    let sessionId: string | null = null;
+    let botId: string | null = null;
+    if (isBotConversation.value) {
+      botId = targetBotId.value || selectedConversation.value?.peerId || null;
+      if (botId) {
+        sessionId = currentBotSessionId.value;
+        if (!sessionId) {
+          console.log('[ChatView] Creating bot session for first message');
+          const session = await createBotSession(botId);
+          sessionId = session.sessionId;
+          console.log('[ChatView] Got bot session:', sessionId);
+        }
+      }
+    }
+
+    await sendMessage(currentUserId.value, conversationId, receiverId, content, groupId, sessionId, botId);
     messageInput.value = '';
+
+    // Lock input for bot conversations (will be unlocked by SSE DONE/ERROR)
+    if (isBotConversation.value && conversationId) {
+      setBotStreamingLock(conversationId, true);
+    }
 
     // Clear targetUserId after sending first message (conversation will be created server-side)
     if (targetUserId.value) {
       console.log('First message sent to user:', targetUserId.value, '- conversation will be created');
       targetUserId.value = null;
     }
+
+    // Clear targetBotId after sending first message (keep it for bot identification though)
+    // Note: We keep targetBotId set so isBotConversation remains true
 
     // Auto scroll on send
     await nextTick();
@@ -973,9 +1151,21 @@ watch(uploading, async (isUploading) => {
   }
 });
 
+// Auto-scroll when streaming message updates
+watch(currentStreamingMessage, async (msg) => {
+  if (msg) {
+    await nextTick();
+    requestAnimationFrame(() => {
+      scrollToBottom();
+    });
+  }
+}, { deep: true });
+
 function onImageError(event: Event) {
   const img = event.target as HTMLImageElement;
-  img.src = defaultAvatarUrl;
+  // Avoid infinite loop: don't reassign if already showing a fallback
+  if (img.src === defaultAvatarUrl || img.src === defaultBotAvatarUrl) return;
+  img.src = isBotConversation.value ? defaultBotAvatarUrl : defaultAvatarUrl;
 }
 
 // Group dialog handlers
@@ -1000,6 +1190,53 @@ function handleLeaveGroupSuccess() {
   // Clear selection since group no longer exists for this user
   selectedConversation.value = null;
   setActiveConversation(null);
+}
+
+// Bot New Chat handlers
+function openNewChatDialog() {
+  isNewChatDialogOpen.value = true;
+}
+
+function closeNewChatDialog() {
+  isNewChatDialogOpen.value = false;
+}
+
+async function confirmNewChat() {
+  if (isCreatingNewSession.value) return;
+
+  const botId = targetBotId.value || selectedConversation.value?.peerId;
+  if (!botId) {
+    console.error('[ChatView] No bot ID available for new chat');
+    closeNewChatDialog();
+    return;
+  }
+
+  isCreatingNewSession.value = true;
+
+  try {
+    const conversationId = selectedConversation.value?.conversationId || null;
+    console.log('[ChatView] Creating new bot session for:', botId, 'conversation:', conversationId);
+
+    // Create new session on server + clear local DB messages if conversation exists
+    const newSession = await createBotSession(botId, conversationId);
+    console.log('[ChatView] New session created:', newSession.sessionId);
+
+    // Clear in-memory messages for this conversation
+    if (conversationId) {
+      clearConversationMessages(conversationId);
+      // Update conversations array (source of truth for conversation list UI)
+      // This clears lastMessage/lastMessageId/lastMessageTimestamp and sets new botSessionId
+      resetConversationForNewSession(conversationId, newSession.sessionId);
+      // Reset pagination state so "No more messages" doesn't show in fresh session
+      hasMoreMessages.value = true;
+    }
+
+    closeNewChatDialog();
+  } catch (error) {
+    console.error('[ChatView] Failed to create new bot session:', error);
+  } finally {
+    isCreatingNewSession.value = false;
+  }
 }
 
 // Handle group menu actions
@@ -1068,6 +1305,33 @@ function handleConversationIdNavigation(conversationId: string) {
   }
 }
 
+// Handle botId from route query parameter (for bot chat navigation)
+function handleBotIdNavigation(botId: string) {
+  if (!botId) return;
+
+  console.log('[ChatView] Navigating to bot chat:', botId);
+
+  // If still loading, set targetBotId and let watcher handle it when ready
+  if (loading.value) {
+    targetBotId.value = botId;
+    return;
+  }
+
+  // Find conversation with matching peerId (bot's ID)
+  const targetConversation = conversations.value.find(conv => conv.peerId === botId);
+
+  if (targetConversation) {
+    // Existing conversation with bot
+    console.log('[ChatView] Found existing bot conversation, selecting');
+    selectConversation(targetConversation);
+    targetBotId.value = botId; // Keep botId for bot identification
+  } else {
+    // No existing conversation - set targetBotId to allow starting new chat
+    console.log('[ChatView] No existing conversation with bot:', botId, '- allowing user to start new chat');
+    targetBotId.value = botId;
+  }
+}
+
 // Watch conversations array - handle pending navigation when conversations load
 // Also sync selectedConversation when underlying data changes (e.g., name/avatar update)
 watch(conversations, () => {
@@ -1085,6 +1349,15 @@ watch(conversations, () => {
   const conversationId = route.query.conversationId as string | undefined;
   if (conversationId && !selectedConversation.value) {
     const targetConversation = conversations.value.find(conv => conv.conversationId === conversationId);
+    if (targetConversation) {
+      selectConversation(targetConversation);
+    }
+  }
+
+  // Handle pending botId navigation
+  const botId = route.query.botId as string | undefined;
+  if (botId && targetBotId.value === botId && !selectedConversation.value) {
+    const targetConversation = conversations.value.find(conv => conv.peerId === botId);
     if (targetConversation) {
       selectConversation(targetConversation);
     }
@@ -1120,10 +1393,24 @@ watch(() => route.query.userId, (newUserId) => {
 watch(() => route.query.conversationId, (newConversationId) => {
   if (newConversationId) {
     handleConversationIdNavigation(newConversationId as string);
-  } else if (!route.query.userId) {
-    // Clear selection when leaving chat (only if no userId either)
+  } else if (!route.query.userId && !route.query.botId) {
+    // Clear selection when leaving chat (only if no userId or botId either)
     selectedConversation.value = null;
     targetUserId.value = null;
+    targetBotId.value = null;
+    setActiveConversation(null);
+  }
+});
+
+// Watch route changes for botId (bot chat navigation)
+watch(() => route.query.botId, (newBotId) => {
+  if (newBotId) {
+    handleBotIdNavigation(newBotId as string);
+  } else if (!route.query.userId && !route.query.conversationId) {
+    // Clear selection when leaving chat
+    selectedConversation.value = null;
+    targetUserId.value = null;
+    targetBotId.value = null;
     setActiveConversation(null);
   }
 });
@@ -1132,11 +1419,37 @@ watch(() => route.query.conversationId, (newConversationId) => {
 onMounted(() => {
   const userId = route.query.userId as string | undefined;
   const conversationId = route.query.conversationId as string | undefined;
+  const botId = route.query.botId as string | undefined;
 
   if (userId) {
     handleUserIdNavigation(userId);
   } else if (conversationId) {
     handleConversationIdNavigation(conversationId);
+  } else if (botId) {
+    handleBotIdNavigation(botId);
   }
 });
 </script>
+
+<style scoped>
+.typing-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 1px;
+  background-color: #9ca3af;
+  border-radius: 50%;
+  animation: typing-bounce 1.4s infinite ease-in-out both;
+}
+
+@keyframes typing-bounce {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+</style>

@@ -37,7 +37,7 @@ type DefaultStoreEngine = SqliteStore;
 
 // Type aliases for complex generic types
 type DefaultSyncHandler = RippleWsSyncHandler<DefaultStoreEngine, DefaultEventEmitter>;
-type DefaultWsMessageHandler = SyncAwareWsMessageHandler<DefaultSyncHandler>;
+type DefaultWsMessageHandler = SyncAwareWsMessageHandler<DefaultSyncHandler, DefaultEventEmitter>;
 pub type DefaultWsManager = RippleWsManager<DefaultWsMessageHandler>;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -88,8 +88,8 @@ pub fn run() {
             );
             let data_sync = DataSyncManager::new(ripple_api.clone(), store);
             let emitter = DefaultEventEmitter::new(app.handle().clone());
-            let syncer = RippleWsSyncHandler::new(data_sync.clone(), emitter);
-            let sync_aware_msg_handler = SyncAwareWsMessageHandler::new(syncer);
+            let syncer = RippleWsSyncHandler::new(data_sync.clone(), emitter.clone());
+            let sync_aware_msg_handler = SyncAwareWsMessageHandler::new(syncer, emitter);
             let ws_manager =
                 RippleWsManager::new(sync_aware_msg_handler.clone(), data_sync.clone());
             app.manage(ripple_api);
@@ -136,6 +136,8 @@ pub fn run() {
             commands::leave_group,
             commands::upload_attachment,
             commands::logout,
+            commands::list_bots,
+            commands::create_bot_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -5,7 +5,7 @@ pub mod incremental_operations;
 pub mod ripple_ws_sync_handler;
 pub mod sync_handler;
 
-mod ui_event;
+pub mod ui_event;
 
 pub use data_sync_manager::DataSyncManager;
 pub use default_event_emitter::DefaultEventEmitter;

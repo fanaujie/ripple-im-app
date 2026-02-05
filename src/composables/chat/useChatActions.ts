@@ -21,6 +21,8 @@ export function useChatActions() {
    * @param receiverId - Receiver's user ID
    * @param content - Message text content
    * @param groupId - Group ID for group chats (optional)
+   * @param sessionId - Bot session ID for bot conversations (optional)
+   * @param botId - Bot ID for bot conversations (optional)
    * @returns Promise resolving to the message ID
    */
   async function sendMessage(
@@ -28,7 +30,9 @@ export function useChatActions() {
     conversationId: string,
     receiverId: string | null,
     content: string,
-    groupId: string | null = null
+    groupId: string | null = null,
+    sessionId: string | null = null,
+    botId: string | null = null
   ): Promise<string> {
     try {
       const messageId = await invoke<string>('send_message', {
@@ -39,6 +43,8 @@ export function useChatActions() {
         text: content,
         fileUrl: null,
         fileName: null,
+        sessionId,
+        botId,
       });
 
       console.log('[useChatActions] Message sent:', messageId);

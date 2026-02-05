@@ -1,3 +1,4 @@
+use crate::ripple_syncer::ui_event::SSEEventData;
 use crate::ripple_ws::sync_aware_ws_message_handler::PushNotification;
 use ripple_proto::ripple_pb::PushMessageRequest;
 
@@ -7,4 +8,5 @@ pub trait SyncHandler: Sync + Clone + 'static {
     async fn handle_relations_update_sync(&self, push_req: PushNotification);
     async fn handle_conversation_update_sync(&self, push_req: PushNotification);
     async fn handle_message_update_sync(&self, push_req: PushMessageRequest);
+    async fn handle_sse_done(&self, event: SSEEventData);
 }

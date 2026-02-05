@@ -398,6 +398,8 @@ pub struct SendMessageRequest {
     pub receiver_id: Option<String>,
     #[serde(rename = "groupId", skip_serializing_if = "Option::is_none")]
     pub group_id: Option<String>,
+    #[serde(rename = "botId", skip_serializing_if = "Option::is_none")]
+    pub bot_id: Option<String>,
     #[serde(rename = "textContent", skip_serializing_if = "Option::is_none")]
     pub text_content: Option<String>,
     #[serde(rename = "fileUrl", skip_serializing_if = "Option::is_none")]

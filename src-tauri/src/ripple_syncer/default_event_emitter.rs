@@ -1,7 +1,7 @@
 use crate::ripple_api::api_response::{RelationUser, UserGroupData, UserProfileData};
 use crate::ripple_syncer::event_emitter::{EventEmitter, UIConversationItem, UIMessageItem};
 use crate::ripple_syncer::ui_event::{
-    ConversationReceivedMessageEvent, MessageUpdateEvent, UIEvent,
+    ConversationReceivedMessageEvent, MessageUpdateEvent, SSEEventData, UIEvent,
 };
 use tauri::{AppHandle, Emitter};
 
@@ -160,5 +160,15 @@ impl EventEmitter for DefaultEventEmitter {
         self.app_handle
             .emit(UIEvent::UserGroupsClearedAll.to_string().as_str(), &())
             .map_err(|e| anyhow::anyhow!("Failed to emit user groups cleared all event: {}", e))
+    }
+
+    fn emit_sse_event(&self, event: SSEEventData) -> anyhow::Result<()> {
+        println!(
+            "Emitting SSE event: type={}, conversation={}",
+            event.event_type, event.conversation_id
+        );
+        self.app_handle
+            .emit(UIEvent::SSEEvent.to_string().as_str(), &event)
+            .map_err(|e| anyhow::anyhow!("Failed to emit SSE event: {}", e))
     }
 }

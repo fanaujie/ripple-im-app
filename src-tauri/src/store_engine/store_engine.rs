@@ -232,6 +232,10 @@ pub trait StoreEngine: Sync + Clone + 'static {
         before_message_id: &str,
         limit: u32,
     ) -> anyhow::Result<Vec<MessageItem>>;
+    async fn delete_messages_by_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> anyhow::Result<()>;
 
     async fn exist_user_groups(&self) -> anyhow::Result<bool>;
     async fn apply_user_group_all(
@@ -802,6 +806,15 @@ impl RippleStorage for MemoryStore {
             .take(limit as usize)
             .map(|(_, msg)| msg.clone())
             .collect())
+    }
+
+    async fn delete_messages_by_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> anyhow::Result<()> {
+        let mut inner = self.inner.lock().await;
+        inner.messages.remove(conversation_id);
+        Ok(())
     }
 
     // User Groups implementations

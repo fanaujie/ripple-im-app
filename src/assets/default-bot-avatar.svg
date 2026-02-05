@@ -1,0 +1,33 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle with purple gradient -->
+  <defs>
+    <linearGradient id="botAvatarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a78bfa;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="64" fill="url(#botAvatarGradient)"/>
+
+  <!-- Robot icon -->
+  <g transform="translate(34, 28)">
+    <!-- Antenna -->
+    <line x1="30" y1="0" x2="30" y2="12" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+    <circle cx="30" cy="0" r="4" fill="white" opacity="0.9"/>
+
+    <!-- Head (rounded rectangle) -->
+    <rect x="6" y="12" width="48" height="36" rx="8" fill="white" opacity="0.9"/>
+
+    <!-- Eyes -->
+    <circle cx="22" cy="30" r="5" fill="#8b5cf6"/>
+    <circle cx="38" cy="30" r="5" fill="#8b5cf6"/>
+
+    <!-- Body -->
+    <rect x="12" y="54" width="36" height="24" rx="6" fill="white" opacity="0.9"/>
+
+    <!-- Body detail line -->
+    <line x1="22" y1="62" x2="38" y2="62" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+    <line x1="22" y1="70" x2="34" y2="70" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+  </g>
+</svg>

@@ -1,7 +1,8 @@
 use crate::app_config::AppConfig;
 use crate::file_utils::FileUtils;
 use crate::ripple_api::api_response::{
-    GroupMemberData, ReadMessagesData, RelationUsers, SendMessageRequest, UserProfileData,
+    BotData, BotSessionData, GroupMemberData, ReadMessagesData, RelationUsers, SendMessageRequest,
+    UserProfileData,
 };
 use crate::ripple_api::RippleApi;
 use crate::ripple_syncer::event_emitter::UIConversations;
@@ -369,6 +370,8 @@ pub async fn send_message(
     text: Option<String>,
     file_url: Option<String>,
     file_name: Option<String>,
+    session_id: Option<String>,
+    bot_id: Option<String>,
     state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
 ) -> Result<String, errors::CommandError> {
     let request = SendMessageRequest {
@@ -376,10 +379,11 @@ pub async fn send_message(
         conversation_id,
         receiver_id,
         group_id,
+        bot_id,
         text_content: text,
         file_url,
         file_name,
-        session_id: None,
+        session_id,
     };
 
     let response = state_ripple.send_message(request).await?;
@@ -799,4 +803,81 @@ pub async fn logout(
     data_sync.clear_token().await?;
 
     Ok(())
+}
+
+// ==================== Bot Commands ====================
+
+#[tauri::command]
+pub async fn list_bots(
+    state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
+) -> Result<Vec<BotData>, errors::CommandError> {
+    let response = state_ripple.list_bots().await?;
+
+    if response.code == 200 {
+        Ok(response.data.map(|d| d.bots).unwrap_or_default())
+    } else {
+        Err(errors::CommandError::RippleAPIError(
+            "list_bots".to_string(),
+            response.code,
+            response.message,
+        ))
+    }
+}
+
+#[tauri::command]
+pub async fn create_bot_session(
+    bot_id: String,
+    conversation_id: Option<String>,
+    state_ripple: State<'_, RippleApi<DefaultStoreEngine>>,
+    data_sync: State<'_, DataSyncManager<DefaultStoreEngine>>,
+) -> Result<BotSessionData, errors::CommandError> {
+    let response = state_ripple.create_new_bot_session(bot_id).await?;
+
+    if response.code == 200 {
+        let session_data = response.data.ok_or_else(|| {
+            errors::CommandError::RippleAPIError(
+                "create_bot_session".to_string(),
+                500,
+                "No session data returned".to_string(),
+            )
+        })?;
+
+        // If conversation_id is provided, clear local messages and update session ID
+        if let Some(conv_id) = conversation_id {
+            println!(
+                "[create_bot_session] Clearing messages and updating session for conversation: {}",
+                conv_id
+            );
+            // Delete all messages for this conversation
+            data_sync
+                .delete_messages_by_conversation(&conv_id)
+                .await
+                .map_err(|e| {
+                    errors::CommandError::RippleAPIError(
+                        "create_bot_session".to_string(),
+                        500,
+                        format!("Failed to clear messages: {}", e),
+                    )
+                })?;
+            // Reset conversation preview and update bot session ID
+            data_sync
+                .reset_conversation_for_new_session(&conv_id, &session_data.session_id)
+                .await
+                .map_err(|e| {
+                    errors::CommandError::RippleAPIError(
+                        "create_bot_session".to_string(),
+                        500,
+                        format!("Failed to update conversation: {}", e),
+                    )
+                })?;
+        }
+
+        Ok(session_data)
+    } else {
+        Err(errors::CommandError::RippleAPIError(
+            "create_bot_session".to_string(),
+            response.code,
+            response.message,
+        ))
+    }
 }

@@ -4,6 +4,7 @@ use crate::ripple_syncer::data_sync_manager::{
 use crate::ripple_syncer::event_emitter::{EventEmitter, UIMessageItem};
 
 use crate::ripple_syncer::sync_handler::RippleSyncHandler;
+use crate::ripple_syncer::ui_event::SSEEventData;
 
 use crate::ripple_api::api_response::{MessageCommandType, MessageItem, MessageItemType};
 use crate::ripple_syncer::DataSyncManager;
@@ -237,6 +238,50 @@ where
                 "[RippleWsSyncHandler] Failed to emit message updated: {}",
                 e
             );
+        }
+    }
+
+    async fn handle_sse_done(&self, event: SSEEventData) {
+        println!(
+            "[RippleWsSyncHandler] handle_sse_done: conversation_id={}, message_id={}",
+            event.conversation_id, event.message_id
+        );
+
+        // Fetch the bot's message from API and store it locally
+        match self
+            .data_sync
+            .fetch_and_store_new_messages(&event.conversation_id)
+            .await
+        {
+            Ok(new_messages) => {
+                println!(
+                    "[RippleWsSyncHandler] Fetched and stored {} new messages for {}",
+                    new_messages.len(),
+                    event.conversation_id
+                );
+
+                // Update conversation summary with the last fetched message
+                if let Some(last_msg) = new_messages.last() {
+                    let preview = last_msg.text.clone().unwrap_or_default();
+                    if let Err(e) = self.emitter.emit_conversations_received(
+                        last_msg.conversation_id.clone(),
+                        0,
+                        preview,
+                        last_msg.send_timestamp.clone(),
+                    ) {
+                        eprintln!(
+                            "[RippleWsSyncHandler] Failed to emit conversation update for SSE DONE: {}",
+                            e
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "[RippleWsSyncHandler] Failed to fetch new messages after SSE DONE: {}",
+                    e
+                );
+            }
         }
     }
 }

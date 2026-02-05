@@ -1,4 +1,6 @@
+use crate::ripple_syncer::event_emitter::EventEmitter;
 use crate::ripple_syncer::sync_handler::RippleSyncHandler;
+use crate::ripple_syncer::ui_event::SSEEventData;
 use crate::ripple_ws::syncer_control::SyncerControl;
 use crate::ripple_ws::ws_message_handler::RippleWsMsgHandler;
 use futures_channel::mpsc::UnboundedSender;
@@ -40,19 +42,22 @@ struct SyncAwareWsMessageHandlerInner {
 }
 
 #[derive(Clone)]
-pub struct SyncAwareWsMessageHandler<S>
+pub struct SyncAwareWsMessageHandler<S, E>
 where
     S: RippleSyncHandler,
+    E: EventEmitter,
 {
     inner: Arc<Mutex<SyncAwareWsMessageHandlerInner>>,
     syncer: S,
+    emitter: E,
 }
 
-impl<S> SyncAwareWsMessageHandler<S>
+impl<S, E> SyncAwareWsMessageHandler<S, E>
 where
     S: RippleSyncHandler,
+    E: EventEmitter,
 {
-    pub fn new(syncer: S) -> SyncAwareWsMessageHandler<S> {
+    pub fn new(syncer: S, emitter: E) -> SyncAwareWsMessageHandler<S, E> {
         SyncAwareWsMessageHandler {
             inner: Arc::new(Mutex::new(SyncAwareWsMessageHandlerInner {
                 self_update_sender: None,
@@ -62,6 +67,7 @@ where
                 watch_tx: None,
             })),
             syncer,
+            emitter,
         }
     }
 
@@ -153,9 +159,10 @@ where
     }
 }
 
-impl<S> SyncerControl for SyncAwareWsMessageHandler<S>
+impl<S, E> SyncerControl for SyncAwareWsMessageHandler<S, E>
 where
     S: RippleSyncHandler,
+    E: EventEmitter,
 {
     async fn start_syncer(&self) -> anyhow::Result<()> {
         let (watch_tx, watch_rx) = watch::channel(false);
@@ -205,9 +212,10 @@ where
     }
 }
 
-impl<S> RippleWsMsgHandler for SyncAwareWsMessageHandler<S>
+impl<S, E> RippleWsMsgHandler for SyncAwareWsMessageHandler<S, E>
 where
     S: RippleSyncHandler,
+    E: EventEmitter,
 {
     async fn handle_message(
         &self,
@@ -278,6 +286,29 @@ where
                                     let _ = sender.unbounded_send(push_message.clone());
                                 } else {
                                     eprintln!("[SyncAwareWsMessageHandler] message_update_sender is None, syncer not started?");
+                                }
+                            }
+                            Some(Payload::SsePayload(sse_data)) => {
+                                // Handle SSE streaming data
+                                println!(
+                                    "SSE payload received: type={}, conversation={}",
+                                    sse_data.event_type, sse_data.conversation_id
+                                );
+                                let event = SSEEventData {
+                                    event_type: sse_data.event_type,
+                                    // send_user_id comes from the outer PushMessageRequest, not the SSE payload
+                                    send_user_id: push_message.send_user_id.clone(),
+                                    conversation_id: sse_data.conversation_id.clone(),
+                                    content: sse_data.content.clone(),
+                                    message_id: sse_data.message_id.to_string(),
+                                    send_timestamp: sse_data.send_timestamp,
+                                };
+                                if let Err(e) = self.emitter.emit_sse_event(event.clone()) {
+                                    eprintln!("[SyncAwareWsMessageHandler] Failed to emit SSE event: {}", e);
+                                }
+                                // On DONE (event_type=2), persist the bot message to local DB
+                                if sse_data.event_type == 2 {
+                                    self.syncer.handle_sse_done(event).await;
                                 }
                             }
                             None => {

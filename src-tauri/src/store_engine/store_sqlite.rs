@@ -965,6 +965,17 @@ impl RippleStorage for SqliteStore {
             .collect())
     }
 
+    async fn delete_messages_by_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> anyhow::Result<()> {
+        sqlx::query("DELETE FROM messages WHERE conversation_id = ?")
+            .bind(conversation_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     async fn exist_user_groups(&self) -> anyhow::Result<bool> {
         let r: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM user_groups")
             .fetch_one(&self.pool)

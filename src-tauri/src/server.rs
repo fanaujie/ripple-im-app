@@ -20,7 +20,7 @@ use tokio::net::ToSocketAddrs;
 use tokio::task::JoinHandle;
 
 type SyncerAwareMsgHandlerType =
-    SyncAwareWsMessageHandler<RippleWsSyncHandler<DefaultStoreEngine, DefaultEventEmitter>>;
+    SyncAwareWsMessageHandler<RippleWsSyncHandler<DefaultStoreEngine, DefaultEventEmitter>, DefaultEventEmitter>;
 
 type WsManagerType = RippleWsManager<SyncerAwareMsgHandlerType>;
 

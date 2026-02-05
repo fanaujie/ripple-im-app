@@ -9,6 +9,21 @@ pub struct MessageUpdateEvent {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct SSEEventData {
+    #[serde(rename = "eventType")]
+    pub event_type: i32,
+    #[serde(rename = "sendUserId")]
+    pub send_user_id: String,
+    #[serde(rename = "conversationId")]
+    pub conversation_id: String,
+    pub content: String,
+    #[serde(rename = "messageId")]
+    pub message_id: String,
+    #[serde(rename = "sendTimestamp")]
+    pub send_timestamp: i64,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ConversationReceivedMessageEvent {
     #[serde(rename = "conversationId")]
     pub conversation_id: String,
@@ -34,6 +49,7 @@ pub enum UIEvent {
     UserGroupUpdated,
     UserGroupDeleted,
     UserGroupsClearedAll,
+    SSEEvent,
 }
 
 impl Display for UIEvent {
@@ -56,6 +72,7 @@ impl Display for UIEvent {
             UIEvent::UserGroupUpdated => "user-group-updated".to_string(),
             UIEvent::UserGroupDeleted => "user-group-deleted".to_string(),
             UIEvent::UserGroupsClearedAll => "user-groups-cleared-all".to_string(),
+            UIEvent::SSEEvent => "sse-event".to_string(),
         };
         write!(f, "{}", str)
     }

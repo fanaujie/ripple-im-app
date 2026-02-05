@@ -1069,29 +1069,6 @@ where
         Ok(res.json::<BotsListResponse>().await?)
     }
 
-    /// Get existing bot session
-    pub async fn get_bot_session(&self, bot_id: String) -> anyhow::Result<BotSessionResponse> {
-        let url = format!("{}/{}", &self.api_paths.bot_sessions, bot_id);
-
-        let res = self
-            .execute_with_auth_retry(
-                |access_token| {
-                    let url = url.clone();
-                    async move {
-                        self.reqwest_client
-                            .get(&url)
-                            .header("Authorization", format!("Bearer {}", access_token))
-                            .send()
-                            .await
-                            .map_err(|e| anyhow!("Failed to get bot session: {}", e))
-                    }
-                },
-                1,
-            )
-            .await?;
-        Ok(res.json::<BotSessionResponse>().await?)
-    }
-
     /// Create a new bot session
     pub async fn create_new_bot_session(
         &self,

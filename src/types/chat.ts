@@ -266,6 +266,47 @@ export interface MessageUpdateEvent {
 }
 
 // ============================================================================
+// SSE Streaming Types
+// ============================================================================
+
+/**
+ * SSE event types for bot streaming responses
+ * Matches the Rust SSEEventType / protobuf SSEEventType
+ */
+export enum SSEEventType {
+  UNSPECIFIED = 0,
+  DELTA = 1,
+  DONE = 2,
+  ERROR = 3,
+}
+
+/**
+ * SSE event data emitted from Rust backend via Tauri event 'sse-event'
+ * Matches the Rust SSEEventData struct
+ */
+export interface SSEEventData {
+  eventType: number;
+  sendUserId: string;
+  conversationId: string;
+  content: string;
+  messageId: string;
+  sendTimestamp: number;
+}
+
+/**
+ * Streaming message state for a bot conversation
+ */
+export interface StreamingMessage {
+  conversationId: string;
+  senderId: string;
+  content: string;
+  isStreaming: boolean;
+  isError: boolean;
+  messageId?: string;
+  timestamp: number;
+}
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 

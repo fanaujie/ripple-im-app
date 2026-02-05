@@ -1,6 +1,6 @@
-import { ref } from 'vue';
-import type { Message, MessageUpdateEvent, UIMessageItem } from '../../types/chat';
-import { MessageAction, sortMessagesByMessageId } from '../../types/chat';
+import { ref, reactive } from 'vue';
+import type { Message, MessageUpdateEvent, UIMessageItem, SSEEventData, StreamingMessage } from '../../types/chat';
+import { MessageAction, SSEEventType, sortMessagesByMessageId } from '../../types/chat';
 
 /**
  * Composable for managing messages state
@@ -188,6 +188,113 @@ export function useMessagesState() {
    */
   function clearConversationMessages(conversationId: string): void {
     delete messagesByConversation.value[conversationId];
+    delete streamingMessages[conversationId];
+  }
+
+  // ============================================================================
+  // SSE Streaming State
+  // ============================================================================
+
+  // Streaming messages keyed by conversationId (reactive for UI binding)
+  const streamingMessages = reactive<Record<string, StreamingMessage>>({});
+
+  // Bot streaming lock: true when waiting for bot response
+  const botStreamingLock = reactive<Record<string, boolean>>({});
+
+  /**
+   * Set bot streaming lock for a conversation (called when user sends message to bot)
+   */
+  function setBotStreamingLock(conversationId: string, locked: boolean): void {
+    if (locked) {
+      botStreamingLock[conversationId] = true;
+    } else {
+      delete botStreamingLock[conversationId];
+    }
+  }
+
+  /**
+   * Check if a conversation is currently in bot streaming state
+   */
+  function isBotStreaming(conversationId: string): boolean {
+    return !!botStreamingLock[conversationId];
+  }
+
+  /**
+   * Get streaming message for a conversation (if any)
+   */
+  function getStreamingMessage(conversationId: string): StreamingMessage | null {
+    return streamingMessages[conversationId] || null;
+  }
+
+  /**
+   * Handle SSE event for streaming bot response
+   */
+  function handleSSEEvent(event: SSEEventData): void {
+    const { conversationId } = event;
+
+    switch (event.eventType) {
+      case SSEEventType.DELTA: {
+        const existing = streamingMessages[conversationId];
+        if (existing) {
+          // Accumulate content
+          existing.content += event.content;
+        } else {
+          // First delta — create streaming message
+          streamingMessages[conversationId] = {
+            conversationId,
+            senderId: event.sendUserId,
+            content: event.content,
+            isStreaming: true,
+            isError: false,
+            timestamp: event.sendTimestamp,
+          };
+        }
+        // Ensure streaming lock is set
+        botStreamingLock[conversationId] = true;
+        console.log('[useMessagesState] SSE DELTA for', conversationId);
+        break;
+      }
+
+      case SSEEventType.DONE: {
+        const streaming = streamingMessages[conversationId];
+        if (streaming) {
+          // Use content from DONE event if provided (full text), otherwise keep accumulated
+          const finalContent = event.content || streaming.content;
+
+          // Convert to a regular message and add to message list
+          const message: Message = {
+            messageId: event.messageId,
+            conversationId,
+            senderId: streaming.senderId,
+            sendTimestamp: event.sendTimestamp || streaming.timestamp,
+            messageType: 1, // Text
+            text: finalContent,
+          };
+          addMessage(message);
+        }
+        // Clean up streaming state
+        delete streamingMessages[conversationId];
+        delete botStreamingLock[conversationId];
+        console.log('[useMessagesState] SSE DONE for', conversationId, 'messageId:', event.messageId);
+        break;
+      }
+
+      case SSEEventType.ERROR: {
+        const streaming = streamingMessages[conversationId];
+        if (streaming) {
+          streaming.isStreaming = false;
+          streaming.isError = true;
+          streaming.content = event.content || 'An error occurred';
+        }
+        // Unlock input on error
+        delete botStreamingLock[conversationId];
+        console.log('[useMessagesState] SSE ERROR for', conversationId);
+        break;
+      }
+
+      default:
+        console.warn('[useMessagesState] Unknown SSE event type:', event.eventType);
+    }
   }
 
   return {
@@ -198,5 +305,11 @@ export function useMessagesState() {
     prependMessages,
     getOldestMessageId,
     clearConversationMessages,
+    // SSE streaming
+    streamingMessages,
+    getStreamingMessage,
+    handleSSEEvent,
+    isBotStreaming,
+    setBotStreamingLock,
   };
 }

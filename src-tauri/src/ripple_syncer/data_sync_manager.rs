@@ -608,6 +608,78 @@ impl<S: RippleStorage> DataSyncManager<S> {
         self.store_engine.store_message(message).await
     }
 
+    /// Fetch new messages from API after the latest cached message and store them locally.
+    /// Returns the newly fetched messages.
+    pub async fn fetch_and_store_new_messages(
+        &self,
+        conversation_id: &str,
+    ) -> anyhow::Result<Vec<MessageItem>> {
+        let cached = self
+            .store_engine
+            .get_latest_messages(conversation_id, 1)
+            .await?;
+        let after_id = cached
+            .last()
+            .map(|m| m.message_id.clone())
+            .unwrap_or_else(|| "0".to_string());
+
+        let api_response = self
+            .ripple_api
+            .read_messages_after(conversation_id.to_string(), after_id, 50)
+            .await?;
+
+        if api_response.code != 200 {
+            anyhow::bail!(
+                "Failed to fetch new messages: code={}, message={}",
+                api_response.code,
+                api_response.message
+            );
+        }
+
+        for msg in &api_response.data.messages {
+            self.store_engine.store_message(msg.clone()).await?;
+        }
+
+        Ok(api_response.data.messages)
+    }
+
+    /// Delete all messages for a conversation (used when starting new bot session)
+    pub async fn delete_messages_by_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> anyhow::Result<()> {
+        self.store_engine
+            .delete_messages_by_conversation(conversation_id)
+            .await
+    }
+
+    /// Reset conversation for new bot session:
+    /// - Clears conversation summary (last message preview)
+    /// - Updates the bot session ID
+    pub async fn reset_conversation_for_new_session(
+        &self,
+        conversation_id: &str,
+        new_session_id: &str,
+    ) -> anyhow::Result<()> {
+        // Clear conversation summary
+        self.store_engine
+            .update_conversation_summary(conversation_id, 0, None, None, None)
+            .await?;
+
+        // Update bot session ID
+        self.store_engine
+            .apply_conversation_action(
+                ConversationStorageAction::UpdateBotSessionId {
+                    conversation_id: conversation_id.to_string(),
+                    bot_session_id: new_session_id.to_string(),
+                },
+                String::new(),
+                false,
+            )
+            .await?;
+        Ok(())
+    }
+
     pub async fn mark_last_read_message_id(
         &self,
         conversation_id: String,

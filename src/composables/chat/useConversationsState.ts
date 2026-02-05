@@ -242,6 +242,30 @@ export function useConversationsState(relations: Ref<Map<string, RelationUser>>)
     }
   }
 
+  /**
+   * Reset conversation preview for new bot session
+   * Clears lastMessage/lastMessageId/lastMessageTimestamp and updates botSessionId
+   */
+  function resetConversationForNewSession(
+    conversationId: string,
+    newSessionId: string
+  ): void {
+    const list = conversations.value;
+    const index = list.findIndex((c) => c.conversationId === conversationId);
+
+    if (index >= 0) {
+      const updated = {
+        ...list[index],
+        lastMessage: undefined,
+        lastMessageId: undefined,
+        lastMessageTimestamp: undefined,
+        botSessionId: newSessionId,
+      };
+      list.splice(index, 1, updated);
+      console.log('[useConversationsState] Reset conversation for new session:', conversationId);
+    }
+  }
+
   return {
     conversations,
     handleEvent, // @deprecated
@@ -252,5 +276,6 @@ export function useConversationsState(relations: Ref<Map<string, RelationUser>>)
     handleReceivedNewMessage,
     initialize,
     updateUnreadCount,
+    resetConversationForNewSession,
   };
 }

@@ -6,6 +6,7 @@ import { useConversationsState } from './useConversationsState';
 import { useMessagesState } from './useMessagesState';
 import { useConversationEvents } from './useConversationEvents';
 import { useMessageEvents } from './useMessageEvents';
+import { useSSEEvents } from './useSSEEvents';
 import { useChatActions } from './useChatActions';
 import { useGroupMembersCache } from './useGroupMembersCache';
 import type { RelationUser } from '../../types/relations';
@@ -154,6 +155,11 @@ export function useChatDisplay(
   });
   useMessageEvents(activeConversationId, handleMessageEvent);
 
+  // SSE streaming events (for bot responses)
+  useSSEEvents(activeConversationId, (event) => {
+    messagesState.handleSSEEvent(event);
+  });
+
   /**
    * Sorted conversations with personalized lastMessage (by last message time, descending)
    * Personalization is applied reactively when currentUserId or relations change
@@ -268,15 +274,19 @@ export function useChatDisplay(
 
   /**
    * Send a message to a conversation
+   * @param sessionId - Bot session ID for bot conversations (optional)
+   * @param botId - Bot ID for bot conversations (optional)
    */
   async function sendMessage(
     senderId: string,
     conversationId: string,
     receiverId: string | null,
     content: string,
-    groupId: string | null = null
+    groupId: string | null = null,
+    sessionId: string | null = null,
+    botId: string | null = null
   ): Promise<string> {
-    return actions.sendMessage(senderId, conversationId, receiverId, content, groupId);
+    return actions.sendMessage(senderId, conversationId, receiverId, content, groupId, sessionId, botId);
   }
 
   /**
@@ -387,5 +397,13 @@ export function useChatDisplay(
     getConversationMessages,
     getConversationById,
     setActiveConversation,
+    clearConversationMessages: messagesState.clearConversationMessages,
+    resetConversationForNewSession: conversationsState.resetConversationForNewSession,
+
+    // SSE streaming
+    streamingMessages: messagesState.streamingMessages,
+    getStreamingMessage: messagesState.getStreamingMessage,
+    isBotStreaming: messagesState.isBotStreaming,
+    setBotStreamingLock: messagesState.setBotStreamingLock,
   };
 }

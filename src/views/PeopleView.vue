@@ -31,6 +31,17 @@
           Groups
         </button>
         <button
+          @click="activeTab = 'bots'"
+          :class="[
+            'py-4 px-2 font-medium ml-8 transition-colors border-b-2',
+            activeTab === 'bots'
+              ? 'text-blue-500 border-blue-500'
+              : 'text-gray-500 hover:text-gray-700 border-transparent'
+          ]"
+        >
+          Bots
+        </button>
+        <button
           @click="activeTab = 'blocked'"
           :class="[
             'py-4 px-2 font-medium ml-8 transition-colors border-b-2',
@@ -277,6 +288,87 @@
         </div>
       </div>
 
+      <!-- Bots Tab -->
+      <div v-if="activeTab === 'bots'">
+        <!-- Bots List -->
+        <div class="space-y-2">
+          <div v-if="botsLoading" class="text-center py-16 text-gray-500">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+          </div>
+
+          <div v-else-if="botsError" class="text-center py-16 text-red-500">
+            {{ botsError }}
+          </div>
+
+          <div v-else-if="bots.length === 0" class="text-center py-16 text-gray-500">
+            No bots available
+          </div>
+
+          <div v-else v-for="bot in bots" :key="bot.botId">
+            <!-- Bot Card -->
+            <div class="bg-white rounded-lg border border-gray-100 hover:shadow-md transition-shadow">
+              <!-- Main Bot Info -->
+              <div
+                class="p-4 cursor-pointer"
+                @click="toggleBotExpansion(bot.botId)"
+              >
+                <div class="flex items-center justify-between">
+                  <!-- Left: Avatar and Info -->
+                  <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-full overflow-hidden relative">
+                      <img
+                        :src="bot.avatar ? getAvatarUrl(bot.avatar) : defaultBotAvatarUrl"
+                        :alt="bot.name"
+                        class="w-full h-full object-cover"
+                        @error="onBotImageError"
+                      />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="font-medium text-gray-900">{{ bot.name }}</div>
+                      <div v-if="bot.description" class="text-sm text-gray-500 truncate max-w-xs">
+                        {{ bot.description }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Right: Expand Icon -->
+                  <div class="flex items-center gap-2">
+                    <HeroIcon
+                      :name="expandedBotId === bot.botId ? 'chevron-up' : 'chevron-down'"
+                      className="w-5 h-5 text-gray-400"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Expanded Content -->
+              <div
+                v-if="expandedBotId === bot.botId"
+                class="px-4 pb-4 pt-0 border-t border-gray-100"
+              >
+                <!-- Full Description -->
+                <div v-if="bot.description" class="mt-3 text-sm text-gray-600">
+                  {{ bot.description }}
+                </div>
+                <div v-else class="mt-3 text-sm text-gray-400 italic">
+                  No description available
+                </div>
+
+                <!-- Chat Button -->
+                <div class="mt-4">
+                  <button
+                    @click.stop="handleBotChat(bot)"
+                    class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                  >
+                    Chat
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Blocked Tab -->
       <div v-if="activeTab === 'blocked'">
         <!-- Blocked Users List -->
@@ -503,19 +595,22 @@ import { useChatDisplay } from '../composables/chat/useChatDisplay';
 import { useGroupsDisplay, type GroupDisplayItem } from '../composables/useGroupsDisplay';
 import { useUserProfileDisplay } from '../composables/useUserProfileDisplay';
 import { useGroupMembersCache } from '../composables/chat/useGroupMembersCache';
+import { useBotsDisplay } from '../composables/useBotsDisplay';
+import type { BotData } from '../types/bot';
 import CreateGroupDialog from '../components/chat/CreateGroupDialog.vue';
 import InviteMembersDialog from '../components/group/InviteMembersDialog.vue';
 import ViewMembersDialog from '../components/group/ViewMembersDialog.vue';
 import EditGroupDialog from '../components/group/EditGroupDialog.vue';
 import LeaveGroupDialog from '../components/group/LeaveGroupDialog.vue';
 import defaultAvatarUrl from '../assets/default-avatar.svg';
+import defaultBotAvatarUrl from '../assets/default-bot-avatar.svg';
 
 // Define component name for KeepAlive
 defineOptions({
   name: 'PeopleView'
 });
 
-type TabType = 'friends' | 'groups' | 'blocked' | 'add';
+type TabType = 'friends' | 'groups' | 'bots' | 'blocked' | 'add';
 
 // Router
 const router = useRouter();
@@ -584,6 +679,29 @@ const { fetchGroupMembers, getGroupMemberCount, useGroupMemberChangeListener } =
 
 // Listen for group member changes (join/leave) and auto-refresh cache
 useGroupMemberChangeListener();
+
+// Bots display
+const {
+  bots,
+  loading: botsLoading,
+  error: botsError,
+} = useBotsDisplay();
+
+// Track which bot is expanded (for showing full description)
+const expandedBotId = ref<string | null>(null);
+
+// Toggle bot card expansion
+function toggleBotExpansion(botId: string) {
+  expandedBotId.value = expandedBotId.value === botId ? null : botId;
+}
+
+// Navigate to bot chat
+function handleBotChat(bot: BotData) {
+  router.push({
+    path: '/chat',
+    query: { botId: bot.botId }
+  });
+}
 
 // Prefetch group members when groups change
 watch(groups, (newGroups) => {
@@ -700,6 +818,13 @@ const onImageError = (event: Event) => {
   const img = event.target as HTMLImageElement;
   if (img.src !== defaultAvatarUrl) {
     img.src = defaultAvatarUrl;
+  }
+};
+
+const onBotImageError = (event: Event) => {
+  const img = event.target as HTMLImageElement;
+  if (img.src !== defaultBotAvatarUrl) {
+    img.src = defaultBotAvatarUrl;
   }
 };
 

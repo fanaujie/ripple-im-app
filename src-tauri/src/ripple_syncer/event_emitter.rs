@@ -1,6 +1,7 @@
 use crate::ripple_api::api_response::{
     GroupMemberData, RelationUser, UserGroupData, UserProfileData,
 };
+use crate::ripple_syncer::ui_event::SSEEventData;
 use crate::store_engine::store_engine::ConversationRecord;
 use ripple_proto::ripple_pb::{push_message_request, send_message_req, PushMessageRequest};
 use serde::{Deserialize, Serialize};
@@ -205,4 +206,6 @@ pub trait EventEmitter: Send + Sync + Clone + 'static {
     fn emit_user_group_update(&self, group: UserGroupData) -> anyhow::Result<()>;
     fn emit_user_group_delete(&self, group_id: String) -> anyhow::Result<()>;
     fn emit_user_groups_clear_all(&self) -> anyhow::Result<()>;
+
+    fn emit_sse_event(&self, event: SSEEventData) -> anyhow::Result<()>;
 }

@@ -56,6 +56,23 @@ message PushMessagePayload {
   int32 unread_count = 3;  // recipient's unread count for this conversation
 }
 
+// SSE event types for bot streaming responses
+enum SSEEventType {
+  SSE_EVENT_TYPE_UNSPECIFIED = 0;
+  SSE_EVENT_TYPE_DELTA = 1;      // streaming fragment
+  SSE_EVENT_TYPE_DONE = 2;       // streaming complete, includes message_id
+  SSE_EVENT_TYPE_ERROR = 3;      // streaming error
+}
+
+// SSE payload - for bot streaming responses
+message PushSSEPayload {
+  SSEEventType event_type = 1;
+  string conversation_id = 2;
+  string content = 3;               // delta text / full text / error message
+  int64 message_id = 4;             // only set when event_type is DONE
+  int64 send_timestamp = 5;
+}
+
 // Main request structure
 message PushMessageRequest {
   string send_user_id = 1;
@@ -64,6 +81,7 @@ message PushMessageRequest {
   oneof payload {
     PushEventPayload event_payload = 4;
     PushMessagePayload message_payload = 5;
+    PushSSEPayload sse_payload = 6;
   }
 }
 
